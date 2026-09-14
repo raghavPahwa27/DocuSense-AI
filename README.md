@@ -9,12 +9,13 @@ A minimal, agentic RAG system that lets you upload enterprise PDFs and ask quest
 DocuSense AI lets you:
 1. **Upload any PDF** through the browser UI.
 2. The document is automatically chunked, embedded, and indexed in FAISS.
-3. A **ReAct agent** with two tools answers your questions:
+3. A **ReAct agent** with three tools answers your questions:
 
 | Tool | When the agent uses it |
 |---|---|
 | `document_retrieval` | Fetching facts from the uploaded document |
 | `calculator` | Performing math on retrieved numbers |
+| `web_search` | Searching the public web via DuckDuckGo |
 
 The agent decides on its own which tool(s) to call and in what order.
 
@@ -61,15 +62,15 @@ This is the core difference: **the LLM drives the loop, not the pipeline.**
                           ↓
                     Text Chunking       ← RecursiveCharacterTextSplitter
                           ↓
-                  Gemini Embeddings     ← models/embedding-001
+                  Gemini Embeddings     ← gemini-embedding-001
                           ↓
                      FAISS Store        ← in-memory similarity index
                           ↓
                  Document Retrieval Tool
                           ↓
                       ReAct Agent       ← Thought → Action → Observation loop
-                     ↙           ↘
-           Document Tool      Calculator Tool
+                   ↙         ↓        ↘
+           Document Tool  Calculator  Web Search Tool
                           ↓
                     Agent Executor
                           ↓
@@ -88,6 +89,7 @@ This is the core difference: **the LLM drives the loop, not the pipeline.**
 | **FAISS** | In-memory vector index; finds the most relevant chunks for any query |
 | **Document Retrieval Tool** | Wraps the FAISS retriever as a callable tool the agent can invoke |
 | **Calculator Tool** | Executes Python math expressions; gives the agent deterministic arithmetic |
+| **Web Search Tool** | Queries DuckDuckGo for public/current information not in the documents |
 | **ReAct Agent** | LLM that alternates Thought → Action → Observation until Final Answer |
 | **Agent Executor** | Runs the agent loop, dispatches tool calls, feeds observations back |
 
@@ -129,16 +131,15 @@ Loads PDFs from the `data/` folder and runs a terminal Q&A loop.
 
 ---
 
-## Example Multi-Step Query
+## Example Queries
 
-**Upload:** an annual financial report PDF
+### Multi-step: Document + Calculator
 
 **Query:**
 ```
 What was the total revenue mentioned in the report, and what is 15% of it?
 ```
-
-**Agent flow (visible in the "Agent Reasoning Trace" expander):**
+**Agent flow:**
 ```
 Action:      document_retrieval
 Input:       "total revenue"
@@ -149,6 +150,48 @@ Input:       0.15 * 4500000
 Observation: 675000.0
 
 Final Answer: The total revenue was $4,500,000 and 15% of it is $675,000.
+```
+
+---
+
+### Web Search: External knowledge not in the document
+
+**Query:**
+```
+What is the current corporate tax rate in India?
+```
+**Agent flow:**
+```
+Thought: This is a general knowledge question not likely in the uploaded document.
+         I should search the web for the current rate.
+
+Action:      web_search
+Input:       "current corporate tax rate India 2024"
+Observation: "The base corporate tax rate in India is 22% for domestic companies..."
+
+Final Answer: The current corporate tax rate in India is 22% for domestic companies.
+```
+
+---
+
+### Multi-step: Document + Web Search
+
+**Query:**
+```
+What industry does this company operate in, and who are its top competitors?
+```
+**Agent flow:**
+```
+Action:      document_retrieval
+Input:       "industry sector business"
+Observation: "...Acme Corp is a leading enterprise software company..."
+
+Action:      web_search
+Input:       "top competitors of enterprise software companies 2024"
+Observation: "Major players include SAP, Oracle, Microsoft Dynamics..."
+
+Final Answer: The company operates in enterprise software. Its top competitors
+             include SAP, Oracle, and Microsoft Dynamics.
 ```
 
 ---

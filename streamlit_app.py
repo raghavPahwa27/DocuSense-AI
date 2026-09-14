@@ -12,6 +12,7 @@ from langchain.tools import Tool
 from langchain import hub
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain_experimental.tools import PythonREPLTool
+from langchain_community.tools import DuckDuckGoSearchRun
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 # Use absolute path so load_dotenv() works regardless of Streamlit's cwd
@@ -212,7 +213,9 @@ with st.sidebar:
     📚 <b style="color:#f0883e;">document_retrieval</b><br>
     &nbsp;&nbsp;&nbsp;Semantic search over PDF<br>
     🔢 <b style="color:#f0883e;">calculator</b><br>
-    &nbsp;&nbsp;&nbsp;Python math expressions
+    &nbsp;&nbsp;&nbsp;Python math expressions<br>
+    🌐 <b style="color:#f0883e;">web_search</b><br>
+    &nbsp;&nbsp;&nbsp;DuckDuckGo public web search
     </div>
     """, unsafe_allow_html=True)
 
@@ -287,7 +290,17 @@ if uploaded_file and uploaded_file.name != st.session_state.indexed_file:
             "Input must be a valid Python math expression, e.g. '0.15 * 4500000'."
         )
 
-        tools = [document_retrieval_tool, calculator_tool]
+        # Step 6 – Web Search Tool
+        # The agent calls this when it needs current or external public information
+        # not present in the enterprise document.
+        web_search_tool             = DuckDuckGoSearchRun()
+        web_search_tool.name        = "web_search"
+        web_search_tool.description = (
+            "Search the public web using DuckDuckGo. Use this for current events, "
+            "publicly available information, or anything not found in the enterprise documents."
+        )
+
+        tools = [document_retrieval_tool, calculator_tool, web_search_tool]
 
         # Step 6 – ReAct Agent
         llm = ChatGoogleGenerativeAI(

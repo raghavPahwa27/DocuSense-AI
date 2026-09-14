@@ -10,6 +10,7 @@ from langchain.tools import Tool
 from langchain import hub
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain_experimental.tools import PythonREPLTool
+from langchain_community.tools import DuckDuckGoSearchRun
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 load_dotenv()
@@ -76,7 +77,17 @@ calculator_tool.description = (
     "Input must be a valid Python math expression, e.g. '0.15 * 4500000'."
 )
 
-tools = [document_retrieval_tool, calculator_tool]
+# ── Step 6: Web Search Tool ────────────────────────────────────────────────────────────────
+# The agent calls this tool when it needs current or external information
+# that is not present inside the enterprise documents.
+web_search_tool = DuckDuckGoSearchRun()
+web_search_tool.name        = "web_search"
+web_search_tool.description = (
+    "Search the public web using DuckDuckGo. Use this for current events, "
+    "publicly available information, or anything not found in the enterprise documents."
+)
+
+tools = [document_retrieval_tool, calculator_tool, web_search_tool]
 
 # ── Step 6: ReAct Agent ────────────────────────────────────────────────────────
 # The ReAct (Reason + Act) pattern lets the LLM alternate between:

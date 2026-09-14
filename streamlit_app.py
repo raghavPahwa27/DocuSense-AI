@@ -1,5 +1,6 @@
 import os
 import tempfile
+from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -13,7 +14,8 @@ from langchain.agents import AgentExecutor, create_react_agent
 from langchain_experimental.tools import PythonREPLTool
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-load_dotenv()
+# Use absolute path so load_dotenv() works regardless of Streamlit's cwd
+load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 CHUNK_SIZE     = 1000
 CHUNK_OVERLAP  = 150

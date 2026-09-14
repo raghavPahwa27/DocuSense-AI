@@ -1,4 +1,5 @@
 import os
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
 
 from langchain_community.document_loaders import PyPDFDirectoryLoader
@@ -14,6 +15,7 @@ from langchain_experimental.tools import PythonREPLTool
 load_dotenv()
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY  # required: gRPC transport reads env var, not kwarg
 DATA_DIR       = "data/"
 CHUNK_SIZE     = 1000
 CHUNK_OVERLAP  = 150

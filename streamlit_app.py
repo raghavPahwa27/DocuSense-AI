@@ -198,7 +198,7 @@ with st.sidebar:
     st.markdown(f"""
     <div style="font-size:0.82rem; color:#8b949e; line-height:1.8;">
     <b style="color:#e6edf3;">Model</b>&nbsp;&nbsp; gemini-1.5-flash<br>
-    <b style="color:#e6edf3;">Embeddings</b>&nbsp;&nbsp; embedding-001<br>
+    <b style="color:#e6edf3;">Embeddings</b>&nbsp;&nbsp; text-embedding-004<br>
     <b style="color:#e6edf3;">Chunk size</b>&nbsp;&nbsp; {CHUNK_SIZE} chars<br>
     <b style="color:#e6edf3;">Overlap</b>&nbsp;&nbsp; {CHUNK_OVERLAP} chars<br>
     <b style="color:#e6edf3;">Top-k chunks</b>&nbsp;&nbsp; 4
@@ -259,7 +259,7 @@ if uploaded_file and uploaded_file.name != st.session_state.indexed_file:
 
         # Step 3 – Gemini Embeddings → FAISS
         embeddings   = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001",
+            model="models/text-embedding-004",
             google_api_key=GOOGLE_API_KEY,
         )
         vector_store = FAISS.from_documents(chunks, embeddings)

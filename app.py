@@ -42,7 +42,7 @@ print(f"   Split into {len(chunks)} chunk(s).")
 # FAISS indexes these vectors so we can do fast similarity search at query time.
 print("🔢 Creating embeddings and building FAISS index ...")
 embeddings   = GoogleGenerativeAIEmbeddings(
-    model="models/embedding-001",
+    model="models/text-embedding-004",
     google_api_key=GOOGLE_API_KEY,
 )
 vector_store = FAISS.from_documents(chunks, embeddings)

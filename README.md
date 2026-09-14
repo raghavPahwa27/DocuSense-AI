@@ -1,16 +1,19 @@
 # DocuSense AI – Agentic Enterprise Knowledge Assistant
 
-A minimal, agentic RAG system that lets you ask questions over enterprise documents (PDFs, reports, policies) from the command line. Powered by **LangChain**, **Google Gemini**, and **FAISS**.
+A minimal, agentic RAG system that lets you upload enterprise PDFs and ask questions through a clean **Streamlit UI**. Powered by **LangChain**, **Google Gemini**, and **FAISS**.
 
 ---
 
 ## What Does It Do?
 
-DocuSense AI loads your PDF documents, indexes them in a local vector store, and spins up a **ReAct agent** with two tools:
+DocuSense AI lets you:
+1. **Upload any PDF** through the browser UI.
+2. The document is automatically chunked, embedded, and indexed in FAISS.
+3. A **ReAct agent** with two tools answers your questions:
 
 | Tool | When the agent uses it |
 |---|---|
-| `document_retrieval` | Fetching facts from documents |
+| `document_retrieval` | Fetching facts from the uploaded document |
 | `calculator` | Performing math on retrieved numbers |
 
 The agent decides on its own which tool(s) to call and in what order.
@@ -48,19 +51,29 @@ This is the core difference: **the LLM drives the loop, not the pipeline.**
 ## Architecture
 
 ```
-Documents (data/*.pdf)
-        ↓
-  Document Loading          ← PyPDFDirectoryLoader
-        ↓
-   Text Chunking            ← RecursiveCharacterTextSplitter
-        ↓
-  Gemini Embeddings         ← models/embedding-001
-        ↓
-  FAISS Vector Store        ← in-memory similarity index
-        ↓
-Document Retrieval Tool ──┐
-                           ├──▶ ReAct Agent ──▶ Agent Executor ──▶ Final Answer
-    Calculator Tool ───────┘
+                 ┌─────────────────┐
+                 │   Streamlit UI  │  ← PDF upload + Q&A interface
+                 └────────┬────────┘
+                          ↓
+                  ┌───────────────┐
+                  │ Document Load │  ← PyPDFLoader
+                  └───────┬───────┘
+                          ↓
+                    Text Chunking       ← RecursiveCharacterTextSplitter
+                          ↓
+                  Gemini Embeddings     ← models/embedding-001
+                          ↓
+                     FAISS Store        ← in-memory similarity index
+                          ↓
+                 Document Retrieval Tool
+                          ↓
+                      ReAct Agent       ← Thought → Action → Observation loop
+                     ↙           ↘
+           Document Tool      Calculator Tool
+                          ↓
+                    Agent Executor
+                          ↓
+                     Final Answer
 ```
 
 ---
@@ -69,13 +82,14 @@ Document Retrieval Tool ──┐
 
 | Technology | Role |
 |---|---|
-| **LangChain** | Orchestrates the entire pipeline: loaders, splitters, tools, agent, executor |
-| **Gemini Embeddings** | Converts text chunks into dense vectors for semantic similarity search |
+| **Streamlit** | Browser UI for PDF upload and question-answering |
+| **LangChain** | Orchestrates loaders, splitters, tools, agent, and executor |
+| **Gemini Embeddings** | Converts text chunks into dense vectors for semantic search |
 | **FAISS** | In-memory vector index; finds the most relevant chunks for any query |
-| **Document Retrieval Tool** | Wraps FAISS retriever as a callable tool the agent can invoke |
+| **Document Retrieval Tool** | Wraps the FAISS retriever as a callable tool the agent can invoke |
 | **Calculator Tool** | Executes Python math expressions; gives the agent deterministic arithmetic |
-| **ReAct Agent** | LLM that alternates Thought → Action → Observation until it has a Final Answer |
-| **Agent Executor** | Runs the agent loop, dispatches tool calls, feeds observations back to the agent |
+| **ReAct Agent** | LLM that alternates Thought → Action → Observation until Final Answer |
+| **Agent Executor** | Runs the agent loop, dispatches tool calls, feeds observations back |
 
 ---
 
@@ -95,52 +109,45 @@ pip install -r requirements.txt
 # 4. Set your Google API key
 cp .env.example .env
 # Open .env and paste your key from https://aistudio.google.com/app/apikey
-
-# 5. Add PDFs
-# Drop one or more PDF files into the data/ folder.
 ```
 
 ---
 
 ## Running
 
+### Streamlit UI (recommended)
+```bash
+streamlit run streamlit_app.py
+```
+Opens at `http://localhost:8501` — upload a PDF from the sidebar and start asking.
+
+### CLI fallback
 ```bash
 python app.py
 ```
-
-The system will load and index your PDFs, then show a prompt:
-
-```
-============================================================
-  DocuSense AI – Agentic Enterprise Knowledge Assistant
-  Type your question and press Enter. Type 'exit' to quit.
-============================================================
-
-You: 
-```
+Loads PDFs from the `data/` folder and runs a terminal Q&A loop.
 
 ---
 
 ## Example Multi-Step Query
 
+**Upload:** an annual financial report PDF
+
 **Query:**
 ```
-What was the total revenue mentioned in the annual report, and what is 15% of it?
+What was the total revenue mentioned in the report, and what is 15% of it?
 ```
 
-**Agent flow:**
+**Agent flow (visible in the "Agent Reasoning Trace" expander):**
 ```
-Thought: I need to find the revenue figure. I'll use document_retrieval.
-Action: document_retrieval
-Action Input: "total revenue annual report"
+Action:      document_retrieval
+Input:       "total revenue"
 Observation: "...Total revenue for FY2024 was $4,500,000..."
 
-Thought: Now I need to calculate 15% of 4,500,000.
-Action: calculator
-Action Input: 0.15 * 4500000
+Action:      calculator
+Input:       0.15 * 4500000
 Observation: 675000.0
 
-Thought: I have both pieces of information.
 Final Answer: The total revenue was $4,500,000 and 15% of it is $675,000.
 ```
 
@@ -150,17 +157,18 @@ Final Answer: The total revenue was $4,500,000 and 15% of it is $675,000.
 
 ```
 DocuSense AI/
-├── app.py            ← All application logic (load, embed, agent, CLI)
+├── streamlit_app.py  ← Streamlit UI + all agent logic
+├── app.py            ← CLI version (terminal Q&A loop)
 ├── requirements.txt  ← Python dependencies
 ├── .env.example      ← API key template
 ├── README.md         ← This file
 └── data/
-    └── sample.pdf    ← Add your PDFs here
+    └── sample.pdf    ← Sample document (CLI mode)
 ```
 
 ---
 
-## Key Constants (in app.py)
+## Key Constants (in both files)
 
 | Constant | Default | Meaning |
 |---|---|---|

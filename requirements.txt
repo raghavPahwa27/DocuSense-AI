@@ -6,3 +6,4 @@ langchainhub
 faiss-cpu
 pypdf
 python-dotenv
+streamlit

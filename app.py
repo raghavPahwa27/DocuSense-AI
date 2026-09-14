@@ -42,7 +42,7 @@ print(f"   Split into {len(chunks)} chunk(s).")
 # FAISS indexes these vectors so we can do fast similarity search at query time.
 print("🔢 Creating embeddings and building FAISS index ...")
 embeddings   = GoogleGenerativeAIEmbeddings(
-    model="models/text-embedding-004",
+    model="models/gemini-embedding-001",
     google_api_key=GOOGLE_API_KEY,
 )
 vector_store = FAISS.from_documents(chunks, embeddings)
@@ -85,7 +85,7 @@ tools = [document_retrieval_tool, calculator_tool]
 #   Observation -> what did the tool return?
 # This loop continues until the agent is confident it has the Final Answer.
 llm = ChatGoogleGenerativeAI(
-    model          = "gemini-1.5-flash",
+    model          = "gemini-3.6-flash",
     google_api_key = GOOGLE_API_KEY,
     temperature    = 0,          # deterministic answers
 )
@@ -104,10 +104,12 @@ agent = create_react_agent(
 # verbose=True prints each Thought / Action / Observation so you can trace the
 # agent's reasoning -- very useful for demos and interviews.
 agent_executor = AgentExecutor(
-    agent   = agent,
-    tools   = tools,
-    verbose = True,
-    handle_parsing_errors = True,
+    agent                 = agent,
+    tools                 = tools,
+    verbose               = True,
+    handle_parsing_errors = "Check your output format. You must output Thought/Action/Action Input or Thought/Final Answer.",
+    max_iterations        = 10,
+    early_stopping_method = "generate",
 )
 
 # ── Step 8: Terminal Question-Answer Loop ──────────────────────────────────────

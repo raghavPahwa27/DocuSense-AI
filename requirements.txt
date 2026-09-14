@@ -1,8 +1,9 @@
-langchain==0.2.16
-langchain-community==0.2.16
-langchain-google-genai==1.0.10
-langchain-experimental==0.0.65
+langchain==0.3.30
+langchain-community==0.3.31
+langchain-google-genai==2.1.12
+langchain-experimental==0.3.4
 langchainhub==0.1.21
+google-generativeai==0.8.6
 faiss-cpu==1.8.0
 pypdf==4.3.1
 python-dotenv==1.0.1

@@ -10,7 +10,7 @@ from langchain.tools import Tool
 from langchain import hub
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain_experimental.tools import PythonREPLTool
-from langchain_community.tools import DuckDuckGoSearchRun
+from duckduckgo_search import DDGS as _DDGS
 from langchain.memory import ConversationBufferWindowMemory
 
 from worker import ingest_document   # imported for RQ enqueue reference
@@ -113,6 +113,20 @@ hr { border-color: #30363d !important; }
     background: #161b22 !important; border: 1px solid #30363d !important;
     border-radius: 10px !important;
 }
+
+/* Web source cards */
+.source-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-left: 3px solid #58a6ff;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 14px;
+    margin: 5px 0;
+    font-size: 0.85rem;
+}
+.source-title { color: #e6edf3; font-weight: 600; margin-bottom: 2px; }
+.source-url   { color: #58a6ff; font-size: 0.78rem; word-break: break-all; }
+.source-snip  { color: #8b949e; margin-top: 4px; font-size: 0.80rem; line-height: 1.5; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -136,14 +150,69 @@ def get_file_hash(file_bytes: bytes) -> str:
 def get_doc_status(file_hash: str) -> str:
     return r.get(f"doc:{file_hash}:status") or "unknown"
 
+
+# ── Web Search Tool with Evidence Capture ─────────────────────────────────────
+class WebSearchTool:
+    """
+    Wraps DDGS to give the agent a plain-text observation (same as before)
+    while side-storing structured {title, url, snippet} evidence for display.
+
+    Design principle: evidence is captured at the tool-result level, not by
+    asking the LLM to produce citations. The LLM never sees or generates URLs.
+
+    Usage:
+        searcher = WebSearchTool()
+        tool = Tool(name="web_search", func=searcher.run, description=...)
+        # after agent.invoke():  searcher.evidence  →  [{title, url, snippet}, ...]
+    """
+
+    def reset(self) -> None:
+        """Clear evidence before each new agent invocation."""
+        self._evidence: list[dict] = []
+        self._seen_urls: set[str]  = set()
+
+    def __init__(self) -> None:
+        self.reset()
+
+    @property
+    def evidence(self) -> list[dict]:
+        return self._evidence
+
+    def run(self, query: str) -> str:
+        """
+        Called by the agent as the web_search tool.
+        Returns a plain text string to the LLM and records structured evidence.
+        """
+        with _DDGS() as ddgs:
+            raw = list(ddgs.text(query, max_results=5))
+
+        # raw items: {title, href, body}  (DDGS library keys)
+        text_parts = []
+        for item in raw:
+            url = item.get("href", "")
+            # Deduplicate across multiple calls in the same agent run
+            if url and url not in self._seen_urls:
+                self._evidence.append({
+                    "title":   item.get("title",   ""),
+                    "url":     url,
+                    "snippet": item.get("body",    ""),
+                })
+                self._seen_urls.add(url)
+            text_parts.append(
+                f"{item.get('title', '')}: {item.get('body', '')}"
+            )
+
+        return "\n\n".join(text_parts)
+
+
 def build_agent(memory: ConversationBufferWindowMemory):
     """
     Load the persisted FAISS index from disk and build a fresh AgentExecutor.
     The memory object is passed in so it survives agent rebuilds.
-    Returns None if no FAISS index exists yet.
+    Returns (AgentExecutor, WebSearchTool) or (None, None) if no FAISS index yet.
     """
     if not os.path.exists(FAISS_INDEX_DIR):
-        return None
+        return None, None
 
     # Load shared FAISS index (written by worker.py)
     embeddings   = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
@@ -180,12 +249,18 @@ def build_agent(memory: ConversationBufferWindowMemory):
         "Input must be a valid Python math expression, e.g. '0.15 * 4500000'."
     )
 
-    # ── Tool 3: Web Search ────────────────────────────────────────────────────
-    web_search_tool             = DuckDuckGoSearchRun()
-    web_search_tool.name        = "web_search"
-    web_search_tool.description = (
-        "Search the public web using DuckDuckGo. Use this for current events, "
-        "publicly available information, or anything not found in the enterprise documents."
+    # ── Tool 3: Web Search (with evidence capture) ────────────────────────────
+    # WebSearchTool.run() is the callable the agent uses. It returns plain text
+    # to the LLM and simultaneously populates WebSearchTool.evidence with
+    # structured {title, url, snippet} dicts for display in the Streamlit UI.
+    web_searcher    = WebSearchTool()
+    web_search_tool = Tool(
+        name        = "web_search",
+        func        = web_searcher.run,
+        description = (
+            "Search the public web using DuckDuckGo. Use this for current events, "
+            "publicly available information, or anything not found in the enterprise documents."
+        ),
     )
 
     tools = [document_retrieval_tool, calculator_tool, web_search_tool]
@@ -201,16 +276,18 @@ def build_agent(memory: ConversationBufferWindowMemory):
     agent        = create_react_agent(llm=llm, tools=tools, prompt=react_prompt)
 
     # ── Agent Executor ────────────────────────────────────────────────────────
-    return AgentExecutor(
+    executor = AgentExecutor(
         agent                     = agent,
         tools                     = tools,
-        memory                    = memory,   # ConversationBufferWindowMemory(k=5)
+        memory                    = memory,
         verbose                   = False,
         handle_parsing_errors     = "Check your output format. You must output Thought/Action/Action Input or Thought/Final Answer.",
         max_iterations            = 10,
         early_stopping_method     = "generate",
         return_intermediate_steps = True,
     )
+    # Return both so the caller can access web_searcher.evidence after invoke()
+    return executor, web_searcher
 
 # ── Session state init ─────────────────────────────────────────────────────────
 if "memory" not in st.session_state:
@@ -222,6 +299,8 @@ if "memory" not in st.session_state:
     )
 if "agent_executor"    not in st.session_state:
     st.session_state.agent_executor    = None
+if "web_searcher"      not in st.session_state:
+    st.session_state.web_searcher      = None   # set by build_agent
 if "completed_hashes"  not in st.session_state:
     st.session_state.completed_hashes  = set()
 if "known_docs"        not in st.session_state:
@@ -355,7 +434,9 @@ if redis_ok:
     }
     if now_completed and now_completed != st.session_state.completed_hashes:
         with st.spinner("🔄 New documents ready — updating knowledge base..."):
-            st.session_state.agent_executor  = build_agent(st.session_state.memory)
+            executor, searcher = build_agent(st.session_state.memory)
+            st.session_state.agent_executor   = executor
+            st.session_state.web_searcher     = searcher
             st.session_state.completed_hashes = now_completed
 
 # ── Stats row ──────────────────────────────────────────────────────────────────
@@ -408,6 +489,24 @@ if st.session_state.agent_executor:
         </div>
         """, unsafe_allow_html=True)
 
+        # ── Web Sources (only when web_search was used) ────────────────────
+        sources = entry.get("sources", [])
+        if sources:
+            with st.expander(f"🌐 Web Sources ({len(sources)})"):
+                for i, src in enumerate(sources, 1):
+                    domain = src["url"].split("/")[2] if src["url"] else ""
+                    st.markdown(f"""
+                    <div class="source-card">
+                        <div class="source-title">{i}. {src['title']}</div>
+                        <div class="source-url">🔗 {domain}</div>
+                        <div class="source-snip">{src['snippet'][:220]}{'...' if len(src['snippet']) > 220 else ''}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.markdown(
+                        f"[Open source ↗]({src['url']})",
+                        unsafe_allow_html=False,
+                    )
+
     # ── Question input ─────────────────────────────────────────────────────────
     st.markdown("---")
     col1, col2 = st.columns([5, 1])
@@ -429,13 +528,24 @@ if st.session_state.agent_executor:
 
     # ── Run the agent ──────────────────────────────────────────────────────────
     if ask_btn and user_query.strip():
+        # Reset evidence collector before each new query so sources are per-response
+        if st.session_state.web_searcher:
+            st.session_state.web_searcher.reset()
+
         with st.spinner("🤖 Agent is reasoning ..."):
             result = st.session_state.agent_executor.invoke({"input": user_query})
 
+        # Capture web evidence collected during this agent run (may be empty)
+        sources = (
+            list(st.session_state.web_searcher.evidence)
+            if st.session_state.web_searcher else []
+        )
+
         st.session_state.chat_history.append({
-            "q":     user_query,
-            "a":     result["output"],
-            "trace": result.get("intermediate_steps", []),
+            "q":       user_query,
+            "a":       result["output"],
+            "trace":   result.get("intermediate_steps", []),
+            "sources": sources,   # [{title, url, snippet}] — empty if web_search unused
         })
         st.rerun()
 

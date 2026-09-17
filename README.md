@@ -75,7 +75,7 @@ Status is tracked per document hash in Redis. The Streamlit sidebar shows live s
 | **FAISS** | Persisted on-disk vector index for all documents |
 | **Document Retrieval Tool** | Wraps FAISS retriever; returns chunks with doc name + page |
 | **Calculator Tool** | Executes Python math expressions |
-| **Web Search Tool** | Queries DuckDuckGo for public/current information |
+| **Web Search Tool** | Wraps DDGS; returns plain text to LLM and captures structured `{title, url, snippet}` evidence per call |
 | **ConversationBufferWindowMemory** | Keeps last 5 exchanges for follow-up questions |
 | **ReAct Agent** | Drives Thought → Action → Observation loop |
 | **Agent Executor** | Runs the agent loop with memory + tool dispatch |
@@ -151,7 +151,7 @@ User:  What about 2023?
 Agent: [uses chat_history to understand "2023" is about revenue] ...
 ```
 
-### Web Search: External knowledge
+### Web Search: External knowledge + source evidence
 ```
 What is the current corporate tax rate in India?
 ```
@@ -159,6 +159,12 @@ What is the current corporate tax rate in India?
 Action: web_search → "corporate tax rate India 2024"
 Final Answer: The base corporate tax rate is 22% for domestic companies.
 ```
+🌐 **Web Sources (3)**
+> 1. Tax Rate Table — India — tradingeconomics.com [Open ↗]
+> 2. India Corporate Tax Overview — taxfoundation.org [Open ↗]
+> 3. Income Tax Act Section 115BA — incometaxindia.gov.in [Open ↗]
+
+> **How evidence capture works:** `WebSearchTool.run()` calls DDGS directly and side-stores `{title, url, snippet}` for each result returned. After `agent.invoke()`, the Streamlit app reads `web_searcher.evidence` and renders it below the answer. The LLM never generates or hallucinates URLs — they come directly from the DDGS API response.
 
 ### Multi-doc + Web Search
 ```

@@ -6,14 +6,14 @@ from dotenv import load_dotenv
 
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
+from langchain_community.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.tools import Tool
 from langchain import hub
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain_experimental.tools import PythonREPLTool
 from duckduckgo_search import DDGS as _DDGS
 from langchain.memory import ConversationBufferWindowMemory
-
-from worker import ingest_document   # imported for RQ enqueue reference
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
@@ -25,16 +25,15 @@ CHUNK_OVERLAP   = 150
 
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
-# ── Page Setup ─────────────────────────────────────────────────────────────────
+# ── Page setup ─────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="DocuSense AI", page_icon="🧠", layout="wide")
 
-# ── Custom CSS ─────────────────────────────────────────────────────────────────
+# ── CSS ────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-
 .stApp { background: #0d1117; color: #e6edf3; }
 
 [data-testid="stSidebar"] {
@@ -53,8 +52,7 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .stat-row { display: flex; gap: 12px; margin-top: 1rem; flex-wrap: wrap; }
 .stat-badge {
     background: #21262d; border: 1px solid #30363d;
-    border-radius: 8px; padding: 8px 14px;
-    font-size: 0.82rem; color: #8b949e;
+    border-radius: 8px; padding: 8px 14px; font-size: 0.82rem; color: #8b949e;
 }
 .stat-badge span { color: #58a6ff; font-weight: 600; font-size: 1rem; display: block; }
 
@@ -93,7 +91,6 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     border-color: #58a6ff !important;
     box-shadow: 0 0 0 2px rgba(88,166,255,0.15) !important;
 }
-
 .stButton > button {
     background: linear-gradient(135deg, #1d4ed8, #7c3aed) !important;
     color: white !important; border: none !important;
@@ -102,7 +99,6 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     transition: opacity 0.2s !important;
 }
 .stButton > button:hover { opacity: 0.88 !important; }
-
 hr { border-color: #30363d !important; }
 [data-testid="stFileUploader"] {
     background: #161b22; border: 1px dashed #30363d;
@@ -113,16 +109,10 @@ hr { border-color: #30363d !important; }
     background: #161b22 !important; border: 1px solid #30363d !important;
     border-radius: 10px !important;
 }
-
-/* Web source cards */
 .source-card {
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-left: 3px solid #58a6ff;
-    border-radius: 0 8px 8px 0;
-    padding: 10px 14px;
-    margin: 5px 0;
-    font-size: 0.85rem;
+    background: #161b22; border: 1px solid #30363d;
+    border-left: 3px solid #58a6ff; border-radius: 0 8px 8px 0;
+    padding: 10px 14px; margin: 5px 0; font-size: 0.85rem;
 }
 .source-title { color: #e6edf3; font-weight: 600; margin-bottom: 2px; }
 .source-url   { color: #58a6ff; font-size: 0.78rem; word-break: break-all; }
@@ -130,40 +120,56 @@ hr { border-color: #30363d !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Redis + RQ connection ───────────────────────────────────────────────────────
-try:
-    from redis import Redis
-    from rq import Queue
-    r        = Redis(host="localhost", port=6379, decode_responses=True)
-    r.ping()
-    q        = Queue(connection=r)
-    redis_ok = True
-except Exception as _re:
-    redis_ok  = False
-    _re_msg   = str(_re)
-
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def get_file_hash(file_bytes: bytes) -> str:
-    """MD5 of file content — used as a unique document ID."""
+    """MD5 of file content — used for duplicate detection."""
     return hashlib.md5(file_bytes).hexdigest()
 
-def get_doc_status(file_hash: str) -> str:
-    return r.get(f"doc:{file_hash}:status") or "unknown"
+def ingest_document(file_path: str, doc_name: str) -> int:
+    """
+    Synchronous ingestion pipeline:
+        Load PDF → split into chunks → Gemini embeddings → update FAISS → save.
 
+    If a FAISS index already exists on disk, loads it and adds the new vectors.
+    Returns the number of chunks created.
+    """
+    # 1. Load PDF pages
+    loader = PyPDFLoader(file_path)
+    pages  = loader.load()
 
-# ── Web Search Tool with Evidence Capture ─────────────────────────────────────
+    # 2. Split into overlapping chunks
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size    = CHUNK_SIZE,
+        chunk_overlap = CHUNK_OVERLAP,
+    )
+    chunks = splitter.split_documents(pages)
+
+    # 3. Attach source metadata to every chunk
+    for i, chunk in enumerate(chunks):
+        chunk.metadata["source"]      = doc_name
+        chunk.metadata["page"]        = chunk.metadata.get("page", 0)
+        chunk.metadata["chunk_index"] = i
+
+    # 4. Embed and persist to FAISS
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+    if os.path.exists(FAISS_INDEX_DIR):
+        index = FAISS.load_local(
+            FAISS_INDEX_DIR, embeddings, allow_dangerous_deserialization=True
+        )
+        index.add_documents(chunks)
+    else:
+        index = FAISS.from_documents(chunks, embeddings)
+    index.save_local(FAISS_INDEX_DIR)
+    return len(chunks)
+
+# ── Web Search Tool with Evidence Capture ──────────────────────────────────────
 class WebSearchTool:
     """
-    Wraps DDGS to give the agent a plain-text observation (same as before)
-    while side-storing structured {title, url, snippet} evidence for display.
+    Wraps DDGS to give the ReAct agent plain-text search results while
+    side-storing structured {title, url, snippet} evidence for display.
 
-    Design principle: evidence is captured at the tool-result level, not by
-    asking the LLM to produce citations. The LLM never sees or generates URLs.
-
-    Usage:
-        searcher = WebSearchTool()
-        tool = Tool(name="web_search", func=searcher.run, description=...)
-        # after agent.invoke():  searcher.evidence  →  [{title, url, snippet}, ...]
+    Evidence is captured at the tool-result level — the LLM never sees or
+    generates URLs; they come directly from the DDGS API response.
     """
 
     def reset(self) -> None:
@@ -179,55 +185,50 @@ class WebSearchTool:
         return self._evidence
 
     def run(self, query: str) -> str:
-        """
-        Called by the agent as the web_search tool.
-        Returns a plain text string to the LLM and records structured evidence.
-        """
         with _DDGS() as ddgs:
             raw = list(ddgs.text(query, max_results=5))
-
-        # raw items: {title, href, body}  (DDGS library keys)
         text_parts = []
         for item in raw:
             url = item.get("href", "")
             # Deduplicate across multiple calls in the same agent run
             if url and url not in self._seen_urls:
                 self._evidence.append({
-                    "title":   item.get("title",   ""),
+                    "title":   item.get("title", ""),
                     "url":     url,
-                    "snippet": item.get("body",    ""),
+                    "snippet": item.get("body",  ""),
                 })
                 self._seen_urls.add(url)
-            text_parts.append(
-                f"{item.get('title', '')}: {item.get('body', '')}"
-            )
-
+            text_parts.append(f"{item.get('title', '')}: {item.get('body', '')}")
         return "\n\n".join(text_parts)
 
-
+# ── Agent builder ──────────────────────────────────────────────────────────────
 def build_agent(memory: ConversationBufferWindowMemory):
     """
-    Load the persisted FAISS index from disk and build a fresh AgentExecutor.
-    The memory object is passed in so it survives agent rebuilds.
-    Returns (AgentExecutor, WebSearchTool) or (None, None) if no FAISS index yet.
+    Load the persisted FAISS index and construct a fresh AgentExecutor.
+
+    Called once when the first document is ready, and again whenever a new
+    document is added (to reload FAISS with the updated index).
+    The memory object is passed in so conversations survive rebuilds.
+
+    Returns (AgentExecutor, WebSearchTool) or (None, None) if no FAISS index.
     """
     if not os.path.exists(FAISS_INDEX_DIR):
         return None, None
 
-    # Load shared FAISS index (written by worker.py)
+    # Load the FAISS index from disk
     embeddings   = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
     vector_store = FAISS.load_local(
         FAISS_INDEX_DIR, embeddings, allow_dangerous_deserialization=True
     )
     retriever = vector_store.as_retriever(search_kwargs={"k": 4})
 
-    # ── Tool 1: Document Retrieval ────────────────────────────────────────────
+    # ── Tool 1: Document Retrieval ─────────────────────────────────────────────
     def retrieve_documents(query: str) -> str:
         docs  = retriever.invoke(query)
         parts = []
         for doc in docs:
-            src  = doc.metadata.get("document_name", "unknown")
-            page = doc.metadata.get("page_number", doc.metadata.get("page", "?"))
+            src  = doc.metadata.get("source", "unknown")
+            page = doc.metadata.get("page", "?")
             parts.append(f"[{src} | page {page}]\n{doc.page_content}")
         return "\n\n".join(parts)
 
@@ -235,159 +236,129 @@ def build_agent(memory: ConversationBufferWindowMemory):
         name        = "document_retrieval",
         func        = retrieve_documents,
         description = (
-            "Search and retrieve information from the uploaded enterprise documents. "
-            "Returns relevant chunks with source document name and page number. "
-            "Input should be a natural language query."
+            "Search and retrieve information from uploaded documents. "
+            "Returns relevant text chunks with source file and page number. "
+            "Use this for any question about the uploaded PDFs."
         ),
     )
 
-    # ── Tool 2: Calculator ────────────────────────────────────────────────────
+    # ── Tool 2: Calculator ─────────────────────────────────────────────────────
     calculator_tool             = PythonREPLTool()
     calculator_tool.name        = "calculator"
     calculator_tool.description = (
-        "Perform mathematical calculations. "
-        "Input must be a valid Python math expression, e.g. '0.15 * 4500000'."
+        "Evaluate mathematical expressions using Python. "
+        "Input must be a valid Python expression, e.g. '0.15 * 4500000'."
     )
 
-    # ── Tool 3: Web Search (with evidence capture) ────────────────────────────
-    # WebSearchTool.run() is the callable the agent uses. It returns plain text
-    # to the LLM and simultaneously populates WebSearchTool.evidence with
-    # structured {title, url, snippet} dicts for display in the Streamlit UI.
+    # ── Tool 3: Web Search (with evidence capture) ─────────────────────────────
+    # WebSearchTool.run() returns plain text to the LLM and simultaneously
+    # populates WebSearchTool.evidence with {title, url, snippet} dicts.
     web_searcher    = WebSearchTool()
     web_search_tool = Tool(
         name        = "web_search",
         func        = web_searcher.run,
         description = (
-            "Search the public web using DuckDuckGo. Use this for current events, "
-            "publicly available information, or anything not found in the enterprise documents."
+            "Search the public web using DuckDuckGo. Use for current events, "
+            "general knowledge, or anything not found in the uploaded documents."
         ),
     )
 
     tools = [document_retrieval_tool, calculator_tool, web_search_tool]
 
-    # ── ReAct Agent with chat memory ──────────────────────────────────────────
+    # ── ReAct Agent with conversational memory ─────────────────────────────────
     llm = ChatGoogleGenerativeAI(
         model          = "gemini-3.6-flash",
         google_api_key = GOOGLE_API_KEY,
         temperature    = 0,
     )
-    # react-chat prompt includes {chat_history} — required for memory to work
+    # hwchase17/react-chat includes {chat_history} — required for memory to work
     react_prompt = hub.pull("hwchase17/react-chat")
     agent        = create_react_agent(llm=llm, tools=tools, prompt=react_prompt)
 
-    # ── Agent Executor ────────────────────────────────────────────────────────
     executor = AgentExecutor(
         agent                     = agent,
         tools                     = tools,
         memory                    = memory,
         verbose                   = False,
-        handle_parsing_errors     = "Check your output format. You must output Thought/Action/Action Input or Thought/Final Answer.",
+        handle_parsing_errors     = (
+            "Check your output format. You must use "
+            "Thought/Action/Action Input or Thought/Final Answer."
+        ),
         max_iterations            = 10,
         early_stopping_method     = "generate",
         return_intermediate_steps = True,
     )
-    # Return both so the caller can access web_searcher.evidence after invoke()
     return executor, web_searcher
 
-# ── Session state init ─────────────────────────────────────────────────────────
+# ── Session state ──────────────────────────────────────────────────────────────
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferWindowMemory(
-        memory_key = "chat_history",
-        k          = 5,              # only last 5 exchanges sent to LLM
+        memory_key      = "chat_history",
+        k               = 5,           # last 5 exchanges sent to LLM
         return_messages = True,
-        output_key = "output",       # needed when return_intermediate_steps=True
+        output_key      = "output",    # needed with return_intermediate_steps
     )
 if "agent_executor"    not in st.session_state:
     st.session_state.agent_executor    = None
 if "web_searcher"      not in st.session_state:
-    st.session_state.web_searcher      = None   # set by build_agent
-if "completed_hashes"  not in st.session_state:
-    st.session_state.completed_hashes  = set()
-if "known_docs"        not in st.session_state:
-    st.session_state.known_docs        = {}
+    st.session_state.web_searcher      = None
 if "chat_history"      not in st.session_state:
     st.session_state.chat_history      = []
+if "processed_hashes"  not in st.session_state:
+    st.session_state.processed_hashes  = set()   # MD5s of ingested files
+if "doc_names"         not in st.session_state:
+    st.session_state.doc_names         = {}       # hash → filename
 
-# Recover any previously processed docs from Redis on fresh page load
-if redis_ok and not st.session_state.known_docs:
-    for key in r.scan_iter("doc:*:status"):
-        fh     = key.split(":")[1]
-        status = r.get(key) or "unknown"
-        name   = r.get(f"doc:{fh}:name") or "unknown"
-        st.session_state.known_docs[fh] = {"name": name, "status": status}
+# If the app restarts but faiss_store/ already exists, rebuild the agent once
+if st.session_state.agent_executor is None and os.path.exists(FAISS_INDEX_DIR):
+    executor, searcher = build_agent(st.session_state.memory)
+    st.session_state.agent_executor = executor
+    st.session_state.web_searcher   = searcher
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
-STATUS_ICON = {
-    "queued":     "🕐",
-    "processing": "⏳",
-    "completed":  "✅",
-    "failed":     "❌",
-    "unknown":    "❓",
-}
-
 with st.sidebar:
     st.markdown("### 📄 Upload Documents")
 
-    if not redis_ok:
-        st.error(
-            f"Redis not reachable.\n\n"
-            f"Run `redis-server` in a terminal then refresh.\n\n`{_re_msg}`"
-        )
-    else:
-        # Multi-file uploader
-        uploaded_files = st.file_uploader(
-            "Drag & drop or browse",
-            type             = ["pdf"],
-            accept_multiple_files = True,
-            label_visibility = "collapsed",
-        )
+    uploaded_files = st.file_uploader(
+        "Drag & drop or browse",
+        type                  = ["pdf"],
+        accept_multiple_files = True,
+        label_visibility      = "collapsed",
+    )
 
-        if uploaded_files:
-            for uf in uploaded_files:
-                file_bytes = uf.read()
-                file_hash  = get_file_hash(file_bytes)
-                doc_name   = uf.name
+    if uploaded_files:
+        new_files = []
+        for uf in uploaded_files:
+            file_bytes = uf.read()
+            file_hash  = get_file_hash(file_bytes)
+            if file_hash not in st.session_state.processed_hashes:
+                new_files.append((uf.name, file_hash, file_bytes))
 
-                if not r.exists(f"doc:{file_hash}:status"):
-                    # Save to uploads/ so the worker can read it
-                    save_path = os.path.join(UPLOADS_DIR, f"{file_hash}.pdf")
-                    with open(save_path, "wb") as fh:
-                        fh.write(file_bytes)
+        if new_files:
+            for doc_name, file_hash, file_bytes in new_files:
+                save_path = os.path.join(UPLOADS_DIR, f"{file_hash}.pdf")
+                with open(save_path, "wb") as fh:
+                    fh.write(file_bytes)
 
-                    # Track in Redis and enqueue the RQ job
-                    r.set(f"doc:{file_hash}:status", "queued")
-                    r.set(f"doc:{file_hash}:name",   doc_name)
-                    q.enqueue(ingest_document, save_path, file_hash, doc_name)
+                with st.spinner(f"⚙️ Processing **{doc_name}** …"):
+                    n_chunks = ingest_document(save_path, doc_name)
 
-                # Always mirror into session state
-                st.session_state.known_docs[file_hash] = {
-                    "name":   doc_name,
-                    "status": get_doc_status(file_hash),
-                }
+                st.session_state.processed_hashes.add(file_hash)
+                st.session_state.doc_names[file_hash] = doc_name
+                st.success(f"✅ {doc_name} — {n_chunks} chunks indexed")
 
-        # Refresh statuses from Redis
-        any_pending = False
-        for fh in list(st.session_state.known_docs):
-            status = get_doc_status(fh)
-            st.session_state.known_docs[fh]["status"] = status
-            if status in ("queued", "processing"):
-                any_pending = True
+            # Rebuild the agent to pick up newly added vectors
+            with st.spinner("🔄 Updating knowledge base …"):
+                executor, searcher = build_agent(st.session_state.memory)
+                st.session_state.agent_executor = executor
+                st.session_state.web_searcher   = searcher
+            st.rerun()
 
-        # Per-document status display
-        if st.session_state.known_docs:
-            st.markdown("**Indexed Documents:**")
-            for fh, info in st.session_state.known_docs.items():
-                icon = STATUS_ICON.get(info["status"], "❓")
-                err  = (r.get(f"doc:{fh}:error") or "") if info["status"] == "failed" else ""
-                label = f"{icon} `{info['name']}`"
-                st.markdown(label)
-                if err:
-                    st.caption(f"Error: {err[:120]}")
-
-        if any_pending:
-            if st.button("🔄 Refresh Status", use_container_width=True):
-                st.rerun()
-            st.caption("Processing in background — click Refresh to update.")
+    # Document list
+    if st.session_state.doc_names:
+        st.markdown("**Indexed Documents:**")
+        for name in st.session_state.doc_names.values():
+            st.markdown(f"✅ `{name}`")
 
     st.markdown("---")
     st.markdown("### ⚙️ Settings")
@@ -403,7 +374,7 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     st.markdown("---")
-    st.markdown("### 🛠️ Tools Available")
+    st.markdown("### 🛠️ Tools")
     st.markdown("""
     <div style="font-size:0.82rem; color:#8b949e; line-height:2;">
     📚 <b style="color:#f0883e;">document_retrieval</b><br>
@@ -415,7 +386,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-# ── Hero Header ────────────────────────────────────────────────────────────────
+# ── Hero ───────────────────────────────────────────────────────────────────────
 st.markdown("""
 <p class="hero-title">🧠 DocuSense AI</p>
 <p class="hero-sub">Agentic Enterprise Knowledge Assistant &nbsp;·&nbsp; ReAct · Gemini · FAISS · Memory</p>
@@ -423,31 +394,15 @@ st.markdown("""
 
 st.markdown("---")
 
-# ── Rebuild agent when new documents finish processing ─────────────────────────
-# On every Streamlit rerun, check if the set of completed docs has grown.
-# If yes, reload FAISS from disk (which now includes new docs) and rebuild agent.
-# Memory is preserved across rebuilds — conversations continue seamlessly.
-if redis_ok:
-    now_completed = {
-        fh for fh, info in st.session_state.known_docs.items()
-        if info["status"] == "completed"
-    }
-    if now_completed and now_completed != st.session_state.completed_hashes:
-        with st.spinner("🔄 New documents ready — updating knowledge base..."):
-            executor, searcher = build_agent(st.session_state.memory)
-            st.session_state.agent_executor   = executor
-            st.session_state.web_searcher     = searcher
-            st.session_state.completed_hashes = now_completed
-
-# ── Stats row ──────────────────────────────────────────────────────────────────
+# ── Main content ───────────────────────────────────────────────────────────────
 TOOL_EMOJI = {"document_retrieval": "📚", "calculator": "🔢", "web_search": "🌐"}
 
 if st.session_state.agent_executor:
-    n_docs = len(st.session_state.completed_hashes)
+    n_docs = len(st.session_state.doc_names)
     st.markdown(f"""
     <div class="stat-row">
         <div class="stat-badge"><span>{n_docs}</span>Document(s) Indexed</div>
-        <div class="stat-badge"><span>FAISS</span>Shared Vector Store</div>
+        <div class="stat-badge"><span>FAISS</span>Vector Store</div>
         <div class="stat-badge"><span>5-turn</span>Chat Memory</div>
         <div class="stat-badge"><span>ReAct</span>Agent Mode</div>
     </div>
@@ -455,7 +410,7 @@ if st.session_state.agent_executor:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Chat history display ───────────────────────────────────────────────────
+    # ── Chat history ───────────────────────────────────────────────────────────
     for entry in st.session_state.chat_history:
         st.markdown(f"""
         <div class="msg-user">
@@ -489,7 +444,7 @@ if st.session_state.agent_executor:
         </div>
         """, unsafe_allow_html=True)
 
-        # ── Web Sources (only when web_search was used) ────────────────────
+        # ── Web Sources (only when web_search was used) ────────────────────────
         sources = entry.get("sources", [])
         if sources:
             with st.expander(f"🌐 Web Sources ({len(sources)})"):
@@ -502,10 +457,7 @@ if st.session_state.agent_executor:
                         <div class="source-snip">{src['snippet'][:220]}{'...' if len(src['snippet']) > 220 else ''}</div>
                     </div>
                     """, unsafe_allow_html=True)
-                    st.markdown(
-                        f"[Open source ↗]({src['url']})",
-                        unsafe_allow_html=False,
-                    )
+                    st.markdown(f"[Open source ↗]({src['url']})")
 
     # ── Question input ─────────────────────────────────────────────────────────
     st.markdown("---")
@@ -513,7 +465,7 @@ if st.session_state.agent_executor:
     with col1:
         user_query = st.text_input(
             "Ask a question",
-            placeholder='e.g. "What was the revenue and what is 15% of it?"',
+            placeholder      = 'e.g. "What was the revenue and what is 15% of it?"',
             label_visibility = "collapsed",
             key              = "question_input",
         )
@@ -523,19 +475,19 @@ if st.session_state.agent_executor:
     if st.session_state.chat_history:
         if st.button("🗑️ Clear Chat", key="clear_btn"):
             st.session_state.chat_history = []
-            st.session_state.memory.clear()   # reset conversational memory too
+            st.session_state.memory.clear()
             st.rerun()
 
     # ── Run the agent ──────────────────────────────────────────────────────────
     if ask_btn and user_query.strip():
-        # Reset evidence collector before each new query so sources are per-response
+        # Reset evidence before each query so sources belong to this response only
         if st.session_state.web_searcher:
             st.session_state.web_searcher.reset()
 
-        with st.spinner("🤖 Agent is reasoning ..."):
+        with st.spinner("🤖 Agent is reasoning …"):
             result = st.session_state.agent_executor.invoke({"input": user_query})
 
-        # Capture web evidence collected during this agent run (may be empty)
+        # Evidence is populated by WebSearchTool.run() during the agent run
         sources = (
             list(st.session_state.web_searcher.evidence)
             if st.session_state.web_searcher else []
@@ -551,24 +503,21 @@ if st.session_state.agent_executor:
 
 # ── Empty state ────────────────────────────────────────────────────────────────
 else:
-    if not redis_ok:
-        pass   # error already shown in sidebar
-    else:
-        st.markdown("""
-        <div style="text-align:center; padding: 60px 20px; color:#8b949e;">
-            <div style="font-size: 3.5rem; margin-bottom: 16px;">📂</div>
-            <div style="font-size: 1.1rem; font-weight: 600; color: #e6edf3; margin-bottom: 8px;">
-                Upload PDFs to get started
-            </div>
-            <div style="font-size: 0.9rem; max-width: 520px; margin: 0 auto; line-height: 1.7;">
-                Upload one or more PDFs. Each document is processed in the background
-                by an RQ worker — chunked, embedded with Gemini, and added to the shared
-                FAISS index. Once ready, the ReAct agent can retrieve facts across
-                all documents, perform calculations, and search the web.
-            </div>
-            <br>
-            <div style="font-size: 0.82rem; color: #58a6ff;">
-                ← Use the sidebar to upload your PDFs
-            </div>
+    st.markdown("""
+    <div style="text-align:center; padding: 60px 20px; color:#8b949e;">
+        <div style="font-size: 3.5rem; margin-bottom: 16px;">📂</div>
+        <div style="font-size: 1.1rem; font-weight: 600; color: #e6edf3; margin-bottom: 8px;">
+            Upload PDFs to get started
         </div>
-        """, unsafe_allow_html=True)
+        <div style="font-size: 0.9rem; max-width: 500px; margin: 0 auto; line-height: 1.7;">
+            Upload one or more PDFs using the sidebar. Each document is processed
+            immediately — chunked, embedded with Gemini, and stored in FAISS.
+            Once done, the ReAct agent can retrieve facts, perform calculations,
+            and search the web.
+        </div>
+        <br>
+        <div style="font-size: 0.82rem; color: #58a6ff;">
+            ← Use the sidebar to upload your PDFs
+        </div>
+    </div>
+    """, unsafe_allow_html=True)

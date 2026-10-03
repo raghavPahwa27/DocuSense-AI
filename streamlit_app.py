@@ -4,8 +4,13 @@ from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
 
+import numpy as np
+import faiss as faiss_lib
+
+from langchain_core.embeddings import Embeddings as _LCEmbeddings
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
+from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.tools import Tool
@@ -120,6 +125,76 @@ hr { border-color: #30363d !important; }
 </style>
 """, unsafe_allow_html=True)
 
+# ── Cosine-similarity FAISS helpers ───────────────────────────────────────────
+#
+# FAISS IndexFlatIP + L2-normalised embeddings == cosine similarity retrieval.
+#   cosine(a, b) = a·b  when ‖a‖ = ‖b‖ = 1
+#
+# _embed_and_normalise()  → normalise a batch of raw embedding vectors.
+# _build_cosine_index()   → create a brand-new IndexFlatIP from documents.
+# _extend_cosine_index()  → add new documents to an existing IndexFlatIP.
+#
+# These helpers are used by both ingest_document() and build_agent() so that
+# the normalisation contract is enforced in exactly one place.
+
+def _embed_and_normalise(
+    texts: list,
+    embedding_model: GoogleGenerativeAIEmbeddings,
+) -> np.ndarray:
+    """Embed *texts* and return L2-normalised float32 vectors."""
+    raw  = embedding_model.embed_documents(texts)
+    vecs = np.array(raw, dtype=np.float32)
+    faiss_lib.normalize_L2(vecs)           # in-place unit-normalisation
+    return vecs
+
+
+def _build_cosine_index(
+    documents: list,
+    embedding_model: GoogleGenerativeAIEmbeddings,
+) -> FAISS:
+    """
+    Build a new LangChain FAISS store backed by IndexFlatIP.
+    Documents are embedded and L2-normalised before insertion.
+    """
+    texts   = [doc.page_content for doc in documents]
+    vectors = _embed_and_normalise(texts, embedding_model)
+    dim     = vectors.shape[1]
+
+    index = faiss_lib.IndexFlatIP(dim)
+    index.add(vectors)
+
+    index_to_docstore_id = {i: str(i) for i in range(len(documents))}
+    docstore = InMemoryDocstore(
+        {str(i): doc for i, doc in enumerate(documents)}
+    )
+    return FAISS(
+        embedding_function   = embedding_model,
+        index                = index,
+        docstore             = docstore,
+        index_to_docstore_id = index_to_docstore_id,
+    )
+
+
+def _extend_cosine_index(
+    existing: FAISS,
+    documents: list,
+    embedding_model: GoogleGenerativeAIEmbeddings,
+) -> None:
+    """
+    Add *documents* to an existing cosine FAISS store in-place.
+    Embeddings are L2-normalised to match the existing IndexFlatIP.
+    """
+    texts   = [doc.page_content for doc in documents]
+    vectors = _embed_and_normalise(texts, embedding_model)
+
+    start_id = existing.index.ntotal
+    existing.index.add(vectors)
+    for i, doc in enumerate(documents):
+        doc_id = str(start_id + i)
+        existing.index_to_docstore_id[start_id + i] = doc_id
+        existing.docstore.add({doc_id: doc})
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def get_file_hash(file_bytes: bytes) -> str:
     """MD5 of file content — used for duplicate detection."""
@@ -128,9 +203,11 @@ def get_file_hash(file_bytes: bytes) -> str:
 def ingest_document(file_path: str, doc_name: str) -> int:
     """
     Synchronous ingestion pipeline:
-        Load PDF → split into chunks → Gemini embeddings → update FAISS → save.
+        Load PDF → split into chunks → Gemini embeddings (L2-normalised)
+        → update IndexFlatIP FAISS → save.
 
-    If a FAISS index already exists on disk, loads it and adds the new vectors.
+    If a FAISS index already exists on disk, loads it and adds the new
+    normalised vectors so cosine similarity is preserved for all chunks.
     Returns the number of chunks created.
     """
     # 1. Load PDF pages
@@ -150,15 +227,19 @@ def ingest_document(file_path: str, doc_name: str) -> int:
         chunk.metadata["page"]        = chunk.metadata.get("page", 0)
         chunk.metadata["chunk_index"] = i
 
-    # 4. Embed and persist to FAISS
+    # 4. Embed (normalised) and persist to FAISS
     embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
-    if os.path.exists(FAISS_INDEX_DIR):
+    if os.path.exists(FAISS_INDEX_DIR) and os.path.exists(
+        os.path.join(FAISS_INDEX_DIR, "index.faiss")
+    ):
+        # Load existing IndexFlatIP store and extend with normalised vectors
         index = FAISS.load_local(
             FAISS_INDEX_DIR, embeddings, allow_dangerous_deserialization=True
         )
-        index.add_documents(chunks)
+        _extend_cosine_index(index, chunks, embeddings)
     else:
-        index = FAISS.from_documents(chunks, embeddings)
+        # First document — build a fresh cosine index
+        index = _build_cosine_index(chunks, embeddings)
     index.save_local(FAISS_INDEX_DIR)
     return len(chunks)
 
@@ -215,8 +296,39 @@ def build_agent(memory: ConversationBufferWindowMemory):
     if not os.path.exists(FAISS_INDEX_DIR):
         return None, None
 
-    # Load the FAISS index from disk
-    embeddings   = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+    # Load the IndexFlatIP FAISS index from disk.
+    # Query vectors must also be L2-normalised at retrieval time so that the
+    # inner-product score equals cosine similarity.  We achieve this via a thin
+    # Embeddings subclass that normalises the output of embed_query().
+    _base_embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+
+    class _NormalisingEmbeddings(_LCEmbeddings):
+        """
+        LangChain Embeddings adapter that L2-normalises query embeddings.
+        Document embeddings were already normalised at index-build / ingest time
+        (via _embed_and_normalise).  This ensures query vectors are also on the
+        unit sphere so IndexFlatIP inner-product == cosine similarity.
+        Inheriting from langchain_core.embeddings.Embeddings satisfies the type
+        contract; __call__ handles the legacy path that calls embedding_function
+        as a bare callable inside langchain_community FAISS internals.
+        """
+        def embed_documents(self, texts: list) -> list:
+            return _base_embeddings.embed_documents(texts)
+
+        def embed_query(self, text: str) -> list:
+            raw = _base_embeddings.embed_query(text)
+            vec = np.array([raw], dtype=np.float32)
+            faiss_lib.normalize_L2(vec)       # in-place unit-normalisation
+            return vec[0].tolist()
+
+        # Legacy callable path used by some LangChain FAISS internals
+        def __call__(self, text: str) -> list:
+            return self.embed_query(text)
+
+        def __getattr__(self, name):
+            return getattr(_base_embeddings, name)
+
+    embeddings   = _NormalisingEmbeddings()
     vector_store = FAISS.load_local(
         FAISS_INDEX_DIR, embeddings, allow_dangerous_deserialization=True
     )

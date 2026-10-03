@@ -2,10 +2,15 @@ import os
 # pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
 
+import numpy as np
+import faiss as faiss_lib
+
+from langchain_core.embeddings import Embeddings as _LCEmbeddings
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
+from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain.tools import Tool
 from langchain import hub
 from langchain.agents import AgentExecutor, create_react_agent
@@ -38,17 +43,85 @@ splitter = RecursiveCharacterTextSplitter(
 chunks = splitter.split_documents(documents)
 print(f"   Split into {len(chunks)} chunk(s).")
 
-# ── Step 3: Gemini Embeddings + FAISS Vector Store ─────────────────────────────
+# ── Step 3: Gemini Embeddings + FAISS Vector Store (cosine similarity) ────────
 # Each chunk is converted into a dense vector by Gemini's embedding model.
-# FAISS indexes these vectors so we can do fast similarity search at query time.
-print("🔢 Creating embeddings and building FAISS index ...")
-embeddings   = GoogleGenerativeAIEmbeddings(
+# Vectors are L2-normalised before being stored in an IndexFlatIP index so that
+# inner-product search corresponds exactly to cosine similarity:
+#   cosine(a, b) = a·b  when ‖a‖ = ‖b‖ = 1
+print("🔢 Creating embeddings and building FAISS index (cosine / IndexFlatIP) ...")
+_base_embeddings = GoogleGenerativeAIEmbeddings(
     model="models/gemini-embedding-001",
     google_api_key=GOOGLE_API_KEY,
 )
-vector_store = FAISS.from_documents(chunks, embeddings)
+
+class _NormalisingEmbeddings(_LCEmbeddings):
+    """
+    LangChain Embeddings adapter that L2-normalises query embeddings.
+    Document embeddings are normalised at build time inside _build_cosine_faiss.
+    This class ensures query vectors are also on the unit sphere so that
+    IndexFlatIP inner-product retrieval equals cosine similarity.
+    Inherits from langchain_core.embeddings.Embeddings to satisfy the type
+    contract; __call__ covers the legacy callable path inside LangChain's
+    community FAISS implementation.
+    """
+    def embed_documents(self, texts: list) -> list:
+        return _base_embeddings.embed_documents(texts)
+
+    def embed_query(self, text: str) -> list:
+        raw = _base_embeddings.embed_query(text)
+        vec = np.array([raw], dtype=np.float32)
+        faiss_lib.normalize_L2(vec)      # in-place unit-normalisation
+        return vec[0].tolist()
+
+    # Legacy callable path used by some LangChain FAISS internals
+    def __call__(self, text: str) -> list:
+        return self.embed_query(text)
+
+    def __getattr__(self, name):
+        return getattr(_base_embeddings, name)
+
+embeddings = _NormalisingEmbeddings()
+
+def _build_cosine_faiss(
+    documents: list,
+    embedding_model: _LCEmbeddings,
+) -> FAISS:
+    """
+    Build a LangChain FAISS vector store backed by an IndexFlatIP index.
+
+    All embeddings are L2-normalised before insertion so that FAISS inner-
+    product search returns cosine-similarity scores rather than raw dot
+    products.  The embedding model and chunking strategy are unchanged.
+    """
+    # Embed all chunks in one batch via the base model (raw vectors)
+    texts    = [doc.page_content for doc in documents]
+    raw_vecs = _base_embeddings.embed_documents(texts)
+
+    # Normalise to unit length (float32 required by FAISS)
+    vectors = np.array(raw_vecs, dtype=np.float32)
+    faiss_lib.normalize_L2(vectors)        # in-place L2 normalisation
+
+    # Build IndexFlatIP (cosine similarity via inner product on unit vectors)
+    dim   = vectors.shape[1]
+    index = faiss_lib.IndexFlatIP(dim)
+    index.add(vectors)
+
+    # Wrap in a LangChain FAISS store; pass the *normalising* embedding wrapper
+    # so that future similarity_search() calls also normalise query vectors.
+    index_to_docstore_id = {i: str(i) for i in range(len(documents))}
+    docstore = InMemoryDocstore(
+        {str(i): doc for i, doc in enumerate(documents)}
+    )
+    return FAISS(
+        embedding_function   = embedding_model,
+        index                = index,
+        docstore             = docstore,
+        index_to_docstore_id = index_to_docstore_id,
+    )
+
+vector_store = _build_cosine_faiss(chunks, embeddings)
 retriever    = vector_store.as_retriever(search_kwargs={"k": 4})
-print("   FAISS index ready.\n")
+print("   FAISS index ready (IndexFlatIP / cosine).\n")
 
 # ── Step 4: Document Retrieval Tool ────────────────────────────────────────────
 # The agent calls this tool when it needs factual information from the documents.

@@ -1,0 +1,1017 @@
+{
+  "metrics": {
+    "recall_at_k": 1.0,
+    "mrr_at_k": 1.0,
+    "answerable_cases": 9,
+    "retrieval_errors": 0,
+    "answer_errors": 0,
+    "judge_errors": 0,
+    "answer_scored_cases": 0,
+    "judge_scored_cases": 0,
+    "rerank_fallbacks": 0,
+    "expected_point_coverage_lexical": null,
+    "llm_judged_relevance": null,
+    "llm_judged_context_support": null
+  },
+  "cases": [
+    {
+      "case_id": "revenue",
+      "question": "What was Orion Labs revenue in 2024?",
+      "manual_judgment": null,
+      "expected_chunk_ids": [
+        "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000000"
+      ],
+      "expected_sources": [
+        "finance-2024.pdf"
+      ],
+      "retrieval_status": "reranked",
+      "retrieved_chunk_ids": [
+        "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000000",
+        "4f4be6ebafcb04b6b90722a41c332150215a58b0e457929369edab9d4c96e95c:000000",
+        "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000001",
+        "fa3bd4b175938ad771238941389c81bfd285a9eb459011298baf4486dd96ffda:000000"
+      ],
+      "retrieved_sources": [
+        "finance-2024.pdf",
+        "finance-2022.pdf",
+        "finance-2024.pdf",
+        "procurement.pdf"
+      ],
+      "recall_at_k": 1.0,
+      "reciprocal_rank_at_k": 1.0,
+      "context": [
+        {
+          "text": "Orion Labs financial report FY2024. Total revenue for 2024 was $4,500,000. Operating profit was $900,000. Figures are in US dollars.",
+          "metadata": {
+            "chunk_id": "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000000",
+            "chunk_index": 0.0,
+            "document_id": "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "e8da1e7b96d70642a48c300db4d0945a2fb0d9b261dfdcfbc81254fd66593091",
+            "source": "finance-2024.pdf",
+            "vector_score": 0.835395694,
+            "rerank_score": 0.9999398
+          }
+        },
+        {
+          "text": "Archived Orion Labs report for FY2022. Revenue was $3,200,000. This is an older reporting year.",
+          "metadata": {
+            "chunk_id": "4f4be6ebafcb04b6b90722a41c332150215a58b0e457929369edab9d4c96e95c:000000",
+            "chunk_index": 0.0,
+            "document_id": "4f4be6ebafcb04b6b90722a41c332150215a58b0e457929369edab9d4c96e95c",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "c40200c8647bd50989a6d98001e7f12befe0c41b987ad8ee1ea41ca24f7a5153",
+            "source": "finance-2022.pdf",
+            "vector_score": 0.798324585,
+            "rerank_score": 0.99193794
+          }
+        },
+        {
+          "text": "Orion Labs financial report FY2023 comparative figures. Total revenue in 2023 was $3,800,000. Operating profit was $620,000.",
+          "metadata": {
+            "chunk_id": "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000001",
+            "chunk_index": 1.0,
+            "document_id": "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 1.0,
+            "revision": "e8da1e7b96d70642a48c300db4d0945a2fb0d9b261dfdcfbc81254fd66593091",
+            "source": "finance-2024.pdf",
+            "vector_score": 0.807212889,
+            "rerank_score": 0.98707944
+          }
+        },
+        {
+          "text": "Purchases above $10,000 require finance approval and two vendor quotations. Purchases at or below $10,000 require manager approval.",
+          "metadata": {
+            "chunk_id": "fa3bd4b175938ad771238941389c81bfd285a9eb459011298baf4486dd96ffda:000000",
+            "chunk_index": 0.0,
+            "document_id": "fa3bd4b175938ad771238941389c81bfd285a9eb459011298baf4486dd96ffda",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "4a212aa237b3e5326bf7f6f7e4d89b83fe0ae4ed21d65de6b7219be5b6aefdc3",
+            "source": "procurement.pdf",
+            "vector_score": 0.554267943,
+            "rerank_score": 0.00022693386
+          }
+        }
+      ],
+      "failure": false,
+      "expected_answer_points": [
+        {
+          "point": "Revenue was $4,500,000",
+          "aliases": [
+            "4,500,000",
+            "4.5 million"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "revenue-comparison",
+      "question": "Compare Orion Labs revenue in 2024 and 2023.",
+      "manual_judgment": null,
+      "expected_chunk_ids": [
+        "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000000",
+        "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000001"
+      ],
+      "expected_sources": [
+        "finance-2024.pdf"
+      ],
+      "retrieval_status": "reranked",
+      "retrieved_chunk_ids": [
+        "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000001",
+        "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000000",
+        "4f4be6ebafcb04b6b90722a41c332150215a58b0e457929369edab9d4c96e95c:000000",
+        "4f4be6ebafcb04b6b90722a41c332150215a58b0e457929369edab9d4c96e95c:000001"
+      ],
+      "retrieved_sources": [
+        "finance-2024.pdf",
+        "finance-2024.pdf",
+        "finance-2022.pdf",
+        "finance-2022.pdf"
+      ],
+      "recall_at_k": 1.0,
+      "reciprocal_rank_at_k": 1.0,
+      "context": [
+        {
+          "text": "Orion Labs financial report FY2023 comparative figures. Total revenue in 2023 was $3,800,000. Operating profit was $620,000.",
+          "metadata": {
+            "chunk_id": "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000001",
+            "chunk_index": 1.0,
+            "document_id": "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 1.0,
+            "revision": "e8da1e7b96d70642a48c300db4d0945a2fb0d9b261dfdcfbc81254fd66593091",
+            "source": "finance-2024.pdf",
+            "vector_score": 0.816818297,
+            "rerank_score": 0.99863297
+          }
+        },
+        {
+          "text": "Orion Labs financial report FY2024. Total revenue for 2024 was $4,500,000. Operating profit was $900,000. Figures are in US dollars.",
+          "metadata": {
+            "chunk_id": "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000000",
+            "chunk_index": 0.0,
+            "document_id": "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "e8da1e7b96d70642a48c300db4d0945a2fb0d9b261dfdcfbc81254fd66593091",
+            "source": "finance-2024.pdf",
+            "vector_score": 0.81074512,
+            "rerank_score": 0.98947024
+          }
+        },
+        {
+          "text": "Archived Orion Labs report for FY2022. Revenue was $3,200,000. This is an older reporting year.",
+          "metadata": {
+            "chunk_id": "4f4be6ebafcb04b6b90722a41c332150215a58b0e457929369edab9d4c96e95c:000000",
+            "chunk_index": 0.0,
+            "document_id": "4f4be6ebafcb04b6b90722a41c332150215a58b0e457929369edab9d4c96e95c",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "c40200c8647bd50989a6d98001e7f12befe0c41b987ad8ee1ea41ca24f7a5153",
+            "source": "finance-2022.pdf",
+            "vector_score": 0.776069641,
+            "rerank_score": 0.6353356
+          }
+        },
+        {
+          "text": "The financial year ends on December 31. Audit preparation begins in January.",
+          "metadata": {
+            "chunk_id": "4f4be6ebafcb04b6b90722a41c332150215a58b0e457929369edab9d4c96e95c:000001",
+            "chunk_index": 1.0,
+            "document_id": "4f4be6ebafcb04b6b90722a41c332150215a58b0e457929369edab9d4c96e95c",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 1.0,
+            "revision": "c40200c8647bd50989a6d98001e7f12befe0c41b987ad8ee1ea41ca24f7a5153",
+            "source": "finance-2022.pdf",
+            "vector_score": 0.584869385,
+            "rerank_score": 0.0002098831
+          }
+        }
+      ],
+      "failure": false,
+      "expected_answer_points": [
+        {
+          "point": "2024 revenue was $4,500,000",
+          "aliases": [
+            "4,500,000",
+            "4.5 million"
+          ]
+        },
+        {
+          "point": "2023 revenue was $3,800,000",
+          "aliases": [
+            "3,800,000",
+            "3.8 million"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "current-expenses",
+      "question": "Under the current travel policy, how soon must I claim expenses?",
+      "manual_judgment": null,
+      "expected_chunk_ids": [
+        "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25:000000"
+      ],
+      "expected_sources": [
+        "travel-policy.pdf"
+      ],
+      "retrieval_status": "reranked",
+      "retrieved_chunk_ids": [
+        "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25:000000",
+        "089f48bd17c118d914b3fd2071eade435bb987961b0a54e85b6f59a9458be55c:000000",
+        "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25:000001",
+        "089f48bd17c118d914b3fd2071eade435bb987961b0a54e85b6f59a9458be55c:000001"
+      ],
+      "retrieved_sources": [
+        "travel-policy.pdf",
+        "travel-policy-archived.pdf",
+        "travel-policy.pdf",
+        "travel-policy-archived.pdf"
+      ],
+      "recall_at_k": 1.0,
+      "reciprocal_rank_at_k": 1.0,
+      "context": [
+        {
+          "text": "Travel expense policy effective January 2025. Employees must submit expense claims within 30 days of completing travel. Receipts are mandatory for every hotel expense.",
+          "metadata": {
+            "chunk_id": "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25:000000",
+            "chunk_index": 0.0,
+            "document_id": "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "69804b1d04201602d95fc291b0b956e162b069c8c2b7a194de2141a4bc674e37",
+            "source": "travel-policy.pdf",
+            "vector_score": 0.778121948,
+            "rerank_score": 0.9773276
+          }
+        },
+        {
+          "text": "Archived 2021 travel policy, no longer active. Expense claims had a 60-day submission deadline. The current policy replaces this deadline.",
+          "metadata": {
+            "chunk_id": "089f48bd17c118d914b3fd2071eade435bb987961b0a54e85b6f59a9458be55c:000000",
+            "chunk_index": 0.0,
+            "document_id": "089f48bd17c118d914b3fd2071eade435bb987961b0a54e85b6f59a9458be55c",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "cabc83bf5775ea4fb811e189142eb3238ba7ba9217c9e2a8d1498478ae066160",
+            "source": "travel-policy-archived.pdf",
+            "vector_score": 0.804367065,
+            "rerank_score": 0.9721515
+          }
+        },
+        {
+          "text": "Travel policy: domestic hotel reimbursement is capped at $180 per night. International hotels require manager approval before booking.",
+          "metadata": {
+            "chunk_id": "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25:000001",
+            "chunk_index": 1.0,
+            "document_id": "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 1.0,
+            "revision": "69804b1d04201602d95fc291b0b956e162b069c8c2b7a194de2141a4bc674e37",
+            "source": "travel-policy.pdf",
+            "vector_score": 0.678283691,
+            "rerank_score": 0.0085443305
+          }
+        },
+        {
+          "text": "Archived hotel cap was $140 per night. This document must not be treated as the current travel policy.",
+          "metadata": {
+            "chunk_id": "089f48bd17c118d914b3fd2071eade435bb987961b0a54e85b6f59a9458be55c:000001",
+            "chunk_index": 1.0,
+            "document_id": "089f48bd17c118d914b3fd2071eade435bb987961b0a54e85b6f59a9458be55c",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 1.0,
+            "revision": "cabc83bf5775ea4fb811e189142eb3238ba7ba9217c9e2a8d1498478ae066160",
+            "source": "travel-policy-archived.pdf",
+            "vector_score": 0.671157837,
+            "rerank_score": 0.0024154834
+          }
+        }
+      ],
+      "failure": false,
+      "expected_answer_points": [
+        {
+          "point": "Claims are due within 30 days",
+          "aliases": [
+            "30 days"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "hotel",
+      "question": "What is the current domestic hotel cap, and are receipts required?",
+      "manual_judgment": null,
+      "expected_chunk_ids": [
+        "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25:000000",
+        "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25:000001"
+      ],
+      "expected_sources": [
+        "travel-policy.pdf"
+      ],
+      "retrieval_status": "reranked",
+      "retrieved_chunk_ids": [
+        "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25:000001",
+        "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25:000000",
+        "089f48bd17c118d914b3fd2071eade435bb987961b0a54e85b6f59a9458be55c:000001",
+        "fa3bd4b175938ad771238941389c81bfd285a9eb459011298baf4486dd96ffda:000000"
+      ],
+      "retrieved_sources": [
+        "travel-policy.pdf",
+        "travel-policy.pdf",
+        "travel-policy-archived.pdf",
+        "procurement.pdf"
+      ],
+      "recall_at_k": 1.0,
+      "reciprocal_rank_at_k": 1.0,
+      "context": [
+        {
+          "text": "Travel policy: domestic hotel reimbursement is capped at $180 per night. International hotels require manager approval before booking.",
+          "metadata": {
+            "chunk_id": "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25:000001",
+            "chunk_index": 1.0,
+            "document_id": "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 1.0,
+            "revision": "69804b1d04201602d95fc291b0b956e162b069c8c2b7a194de2141a4bc674e37",
+            "source": "travel-policy.pdf",
+            "vector_score": 0.754127562,
+            "rerank_score": 0.43506128
+          }
+        },
+        {
+          "text": "Travel expense policy effective January 2025. Employees must submit expense claims within 30 days of completing travel. Receipts are mandatory for every hotel expense.",
+          "metadata": {
+            "chunk_id": "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25:000000",
+            "chunk_index": 0.0,
+            "document_id": "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "69804b1d04201602d95fc291b0b956e162b069c8c2b7a194de2141a4bc674e37",
+            "source": "travel-policy.pdf",
+            "vector_score": 0.716697752,
+            "rerank_score": 0.16559312
+          }
+        },
+        {
+          "text": "Archived hotel cap was $140 per night. This document must not be treated as the current travel policy.",
+          "metadata": {
+            "chunk_id": "089f48bd17c118d914b3fd2071eade435bb987961b0a54e85b6f59a9458be55c:000001",
+            "chunk_index": 1.0,
+            "document_id": "089f48bd17c118d914b3fd2071eade435bb987961b0a54e85b6f59a9458be55c",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 1.0,
+            "revision": "cabc83bf5775ea4fb811e189142eb3238ba7ba9217c9e2a8d1498478ae066160",
+            "source": "travel-policy-archived.pdf",
+            "vector_score": 0.7347489,
+            "rerank_score": 0.10356715
+          }
+        },
+        {
+          "text": "Purchases above $10,000 require finance approval and two vendor quotations. Purchases at or below $10,000 require manager approval.",
+          "metadata": {
+            "chunk_id": "fa3bd4b175938ad771238941389c81bfd285a9eb459011298baf4486dd96ffda:000000",
+            "chunk_index": 0.0,
+            "document_id": "fa3bd4b175938ad771238941389c81bfd285a9eb459011298baf4486dd96ffda",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "4a212aa237b3e5326bf7f6f7e4d89b83fe0ae4ed21d65de6b7219be5b6aefdc3",
+            "source": "procurement.pdf",
+            "vector_score": 0.611152709,
+            "rerank_score": 0.0001535624
+          }
+        }
+      ],
+      "failure": false,
+      "expected_answer_points": [
+        {
+          "point": "Cap is $180 per night",
+          "aliases": [
+            "180"
+          ]
+        },
+        {
+          "point": "Hotel receipts are mandatory",
+          "aliases": [
+            "receipt"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "security",
+      "question": "How quickly must I report a suspected security incident, and what should I do with affected credentials?",
+      "manual_judgment": null,
+      "expected_chunk_ids": [
+        "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75:000000"
+      ],
+      "expected_sources": [
+        "security-policy.pdf"
+      ],
+      "retrieval_status": "reranked",
+      "retrieved_chunk_ids": [
+        "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75:000000",
+        "dd12e0f6e337b91fa66c39b38caa8f08bd16054921d2fe69cdc296a9c438ecb3:000000",
+        "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449:000000",
+        "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25:000000"
+      ],
+      "retrieved_sources": [
+        "security-policy.pdf",
+        "onboarding.pdf",
+        "support-sla.pdf",
+        "travel-policy.pdf"
+      ],
+      "recall_at_k": 1.0,
+      "reciprocal_rank_at_k": 1.0,
+      "context": [
+        {
+          "text": "Security incident response policy. Report a suspected security incident within 1 hour to the security team. Rotate affected credentials immediately.",
+          "metadata": {
+            "chunk_id": "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75:000000",
+            "chunk_index": 0.0,
+            "document_id": "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "446c32020dab608f3d480038e311ad9bf12e1f0bab39ce9f8cc852bf2de68321",
+            "source": "security-policy.pdf",
+            "vector_score": 0.821777344,
+            "rerank_score": 0.9989225
+          }
+        },
+        {
+          "text": "New hires complete security training within 7 days of their start date. Device encryption must be enabled before accessing customer systems.",
+          "metadata": {
+            "chunk_id": "dd12e0f6e337b91fa66c39b38caa8f08bd16054921d2fe69cdc296a9c438ecb3:000000",
+            "chunk_index": 0.0,
+            "document_id": "dd12e0f6e337b91fa66c39b38caa8f08bd16054921d2fe69cdc296a9c438ecb3",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "d99eefc4b90b9b481352e958bbb21d0154be5800e8277e222c1e9f5e9b83afe6",
+            "source": "onboarding.pdf",
+            "vector_score": 0.665100157,
+            "rerank_score": 0.00085924764
+          }
+        },
+        {
+          "text": "Enterprise support SLA. Priority 1 outages have a first-response target of 15 minutes. Priority 2 incidents have a first-response target of 4 hours.",
+          "metadata": {
+            "chunk_id": "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449:000000",
+            "chunk_index": 0.0,
+            "document_id": "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "c5ddce96c81f3222b2d8fd4b90f5ac5c9fb9d11fb2f396736090c53d74d40a69",
+            "source": "support-sla.pdf",
+            "vector_score": 0.607071,
+            "rerank_score": 0.0005703157
+          }
+        },
+        {
+          "text": "Travel expense policy effective January 2025. Employees must submit expense claims within 30 days of completing travel. Receipts are mandatory for every hotel expense.",
+          "metadata": {
+            "chunk_id": "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25:000000",
+            "chunk_index": 0.0,
+            "document_id": "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "69804b1d04201602d95fc291b0b956e162b069c8c2b7a194de2141a4bc674e37",
+            "source": "travel-policy.pdf",
+            "vector_score": 0.568817198,
+            "rerank_score": 5.5189234e-05
+          }
+        }
+      ],
+      "failure": false,
+      "expected_answer_points": [
+        {
+          "point": "Report within 1 hour",
+          "aliases": [
+            "1 hour",
+            "one hour"
+          ]
+        },
+        {
+          "point": "Rotate affected credentials immediately",
+          "aliases": [
+            "rotat"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "sla",
+      "question": "Compare the response targets for Priority 1 and Priority 2 support.",
+      "manual_judgment": null,
+      "expected_chunk_ids": [
+        "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449:000000"
+      ],
+      "expected_sources": [
+        "support-sla.pdf"
+      ],
+      "retrieval_status": "reranked",
+      "retrieved_chunk_ids": [
+        "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449:000000",
+        "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449:000001",
+        "042bce59a2aa5be434052d813a66f3b28ceef17b71b24297c8d726b36e29f597:000000",
+        "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75:000000"
+      ],
+      "retrieved_sources": [
+        "support-sla.pdf",
+        "support-sla.pdf",
+        "disaster-recovery.pdf",
+        "security-policy.pdf"
+      ],
+      "recall_at_k": 1.0,
+      "reciprocal_rank_at_k": 1.0,
+      "context": [
+        {
+          "text": "Enterprise support SLA. Priority 1 outages have a first-response target of 15 minutes. Priority 2 incidents have a first-response target of 4 hours.",
+          "metadata": {
+            "chunk_id": "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449:000000",
+            "chunk_index": 0.0,
+            "document_id": "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "c5ddce96c81f3222b2d8fd4b90f5ac5c9fb9d11fb2f396736090c53d74d40a69",
+            "source": "support-sla.pdf",
+            "vector_score": 0.797706604,
+            "rerank_score": 0.99909604
+          }
+        },
+        {
+          "text": "Standard support operates Monday through Friday, 09:00 to 18:00 UTC. Enterprise Priority 1 coverage is available around the clock.",
+          "metadata": {
+            "chunk_id": "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449:000001",
+            "chunk_index": 1.0,
+            "document_id": "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 1.0,
+            "revision": "c5ddce96c81f3222b2d8fd4b90f5ac5c9fb9d11fb2f396736090c53d74d40a69",
+            "source": "support-sla.pdf",
+            "vector_score": 0.759719849,
+            "rerank_score": 0.028490042
+          }
+        },
+        {
+          "text": "Disaster recovery objectives: recovery time objective is 4 hours. Recovery point objective is 1 hour.",
+          "metadata": {
+            "chunk_id": "042bce59a2aa5be434052d813a66f3b28ceef17b71b24297c8d726b36e29f597:000000",
+            "chunk_index": 0.0,
+            "document_id": "042bce59a2aa5be434052d813a66f3b28ceef17b71b24297c8d726b36e29f597",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "09263a83a0cd6cd2bb351228a79b327d8e269e677b4083f2496527504d12b09d",
+            "source": "disaster-recovery.pdf",
+            "vector_score": 0.673187256,
+            "rerank_score": 0.010130412
+          }
+        },
+        {
+          "text": "Security incident response policy. Report a suspected security incident within 1 hour to the security team. Rotate affected credentials immediately.",
+          "metadata": {
+            "chunk_id": "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75:000000",
+            "chunk_index": 0.0,
+            "document_id": "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "446c32020dab608f3d480038e311ad9bf12e1f0bab39ce9f8cc852bf2de68321",
+            "source": "security-policy.pdf",
+            "vector_score": 0.638259828,
+            "rerank_score": 0.00092538487
+          }
+        }
+      ],
+      "failure": false,
+      "expected_answer_points": [
+        {
+          "point": "P1 is 15 minutes",
+          "aliases": [
+            "15 minutes"
+          ]
+        },
+        {
+          "point": "P2 is 4 hours",
+          "aliases": [
+            "4 hours",
+            "four hours"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "new-hire",
+      "question": "When must a new hire finish security training?",
+      "manual_judgment": null,
+      "expected_chunk_ids": [
+        "dd12e0f6e337b91fa66c39b38caa8f08bd16054921d2fe69cdc296a9c438ecb3:000000"
+      ],
+      "expected_sources": [
+        "onboarding.pdf"
+      ],
+      "retrieval_status": "reranked",
+      "retrieved_chunk_ids": [
+        "dd12e0f6e337b91fa66c39b38caa8f08bd16054921d2fe69cdc296a9c438ecb3:000000",
+        "dd12e0f6e337b91fa66c39b38caa8f08bd16054921d2fe69cdc296a9c438ecb3:000001",
+        "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75:000000",
+        "20b27450c0ce24a4525206474f92e2dfce702ac6810941810e2db374b9fe8c14:000000"
+      ],
+      "retrieved_sources": [
+        "onboarding.pdf",
+        "onboarding.pdf",
+        "security-policy.pdf",
+        "leave-policy.pdf"
+      ],
+      "recall_at_k": 1.0,
+      "reciprocal_rank_at_k": 1.0,
+      "context": [
+        {
+          "text": "New hires complete security training within 7 days of their start date. Device encryption must be enabled before accessing customer systems.",
+          "metadata": {
+            "chunk_id": "dd12e0f6e337b91fa66c39b38caa8f08bd16054921d2fe69cdc296a9c438ecb3:000000",
+            "chunk_index": 0.0,
+            "document_id": "dd12e0f6e337b91fa66c39b38caa8f08bd16054921d2fe69cdc296a9c438ecb3",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "d99eefc4b90b9b481352e958bbb21d0154be5800e8277e222c1e9f5e9b83afe6",
+            "source": "onboarding.pdf",
+            "vector_score": 0.827880859,
+            "rerank_score": 0.98646784
+          }
+        },
+        {
+          "text": "Onboarding assigns a mentor on day one. The mentor schedules a check-in after two weeks.",
+          "metadata": {
+            "chunk_id": "dd12e0f6e337b91fa66c39b38caa8f08bd16054921d2fe69cdc296a9c438ecb3:000001",
+            "chunk_index": 1.0,
+            "document_id": "dd12e0f6e337b91fa66c39b38caa8f08bd16054921d2fe69cdc296a9c438ecb3",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 1.0,
+            "revision": "d99eefc4b90b9b481352e958bbb21d0154be5800e8277e222c1e9f5e9b83afe6",
+            "source": "onboarding.pdf",
+            "vector_score": 0.662216127,
+            "rerank_score": 0.0011786721
+          }
+        },
+        {
+          "text": "Security incident response policy. Report a suspected security incident within 1 hour to the security team. Rotate affected credentials immediately.",
+          "metadata": {
+            "chunk_id": "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75:000000",
+            "chunk_index": 0.0,
+            "document_id": "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "446c32020dab608f3d480038e311ad9bf12e1f0bab39ce9f8cc852bf2de68321",
+            "source": "security-policy.pdf",
+            "vector_score": 0.658676088,
+            "rerank_score": 0.0004691764
+          }
+        },
+        {
+          "text": "Employees receive 20 days of annual leave per calendar year. Up to 5 unused days can be carried into the next year.",
+          "metadata": {
+            "chunk_id": "20b27450c0ce24a4525206474f92e2dfce702ac6810941810e2db374b9fe8c14:000000",
+            "chunk_index": 0.0,
+            "document_id": "20b27450c0ce24a4525206474f92e2dfce702ac6810941810e2db374b9fe8c14",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "fce6fc3b5898295bb04148ba1abdba4e9228674ea0e0c16555cc10be52a91539",
+            "source": "leave-policy.pdf",
+            "vector_score": 0.569351256,
+            "rerank_score": 6.553816e-05
+          }
+        }
+      ],
+      "failure": false,
+      "expected_answer_points": [
+        {
+          "point": "Within 7 days",
+          "aliases": [
+            "7 days",
+            "seven days"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "termination",
+      "question": "How much notice is required to terminate the vendor contract?",
+      "manual_judgment": null,
+      "expected_chunk_ids": [
+        "5b7844611b3b4705ed17a6c7bf72f32d04f6020e1b568771620f2a6af1e1158c:000000"
+      ],
+      "expected_sources": [
+        "vendor-contract.pdf"
+      ],
+      "retrieval_status": "reranked",
+      "retrieved_chunk_ids": [
+        "5b7844611b3b4705ed17a6c7bf72f32d04f6020e1b568771620f2a6af1e1158c:000000",
+        "5b7844611b3b4705ed17a6c7bf72f32d04f6020e1b568771620f2a6af1e1158c:000001",
+        "fa3bd4b175938ad771238941389c81bfd285a9eb459011298baf4486dd96ffda:000001",
+        "fa3bd4b175938ad771238941389c81bfd285a9eb459011298baf4486dd96ffda:000000"
+      ],
+      "retrieved_sources": [
+        "vendor-contract.pdf",
+        "vendor-contract.pdf",
+        "procurement.pdf",
+        "procurement.pdf"
+      ],
+      "recall_at_k": 1.0,
+      "reciprocal_rank_at_k": 1.0,
+      "context": [
+        {
+          "text": "Vendor contract termination requires 45 days of written notice. Material breach triggers a 10-day cure period before termination.",
+          "metadata": {
+            "chunk_id": "5b7844611b3b4705ed17a6c7bf72f32d04f6020e1b568771620f2a6af1e1158c:000000",
+            "chunk_index": 0.0,
+            "document_id": "5b7844611b3b4705ed17a6c7bf72f32d04f6020e1b568771620f2a6af1e1158c",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "9206097f33f627cd5e46e90eab8968008da5da6262a10ab18546c73035c4e8cb",
+            "source": "vendor-contract.pdf",
+            "vector_score": 0.83139807,
+            "rerank_score": 0.99783427
+          }
+        },
+        {
+          "text": "The vendor contract is governed by the agreed commercial terms. Annual contract value is $120,000.",
+          "metadata": {
+            "chunk_id": "5b7844611b3b4705ed17a6c7bf72f32d04f6020e1b568771620f2a6af1e1158c:000001",
+            "chunk_index": 1.0,
+            "document_id": "5b7844611b3b4705ed17a6c7bf72f32d04f6020e1b568771620f2a6af1e1158c",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 1.0,
+            "revision": "9206097f33f627cd5e46e90eab8968008da5da6262a10ab18546c73035c4e8cb",
+            "source": "vendor-contract.pdf",
+            "vector_score": 0.740364134,
+            "rerank_score": 0.052327625
+          }
+        },
+        {
+          "text": "Purchase orders must precede vendor invoicing. Invoices are normally paid within 30 days of receipt.",
+          "metadata": {
+            "chunk_id": "fa3bd4b175938ad771238941389c81bfd285a9eb459011298baf4486dd96ffda:000001",
+            "chunk_index": 1.0,
+            "document_id": "fa3bd4b175938ad771238941389c81bfd285a9eb459011298baf4486dd96ffda",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 1.0,
+            "revision": "4a212aa237b3e5326bf7f6f7e4d89b83fe0ae4ed21d65de6b7219be5b6aefdc3",
+            "source": "procurement.pdf",
+            "vector_score": 0.653015196,
+            "rerank_score": 0.0018386652
+          }
+        },
+        {
+          "text": "Purchases above $10,000 require finance approval and two vendor quotations. Purchases at or below $10,000 require manager approval.",
+          "metadata": {
+            "chunk_id": "fa3bd4b175938ad771238941389c81bfd285a9eb459011298baf4486dd96ffda:000000",
+            "chunk_index": 0.0,
+            "document_id": "fa3bd4b175938ad771238941389c81bfd285a9eb459011298baf4486dd96ffda",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "4a212aa237b3e5326bf7f6f7e4d89b83fe0ae4ed21d65de6b7219be5b6aefdc3",
+            "source": "procurement.pdf",
+            "vector_score": 0.618614256,
+            "rerank_score": 0.0009927262
+          }
+        }
+      ],
+      "failure": false,
+      "expected_answer_points": [
+        {
+          "point": "45 days written notice",
+          "aliases": [
+            "45 days"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "backup-vs-recovery",
+      "question": "What is backup retention and what are the recovery time and recovery point objectives?",
+      "manual_judgment": null,
+      "expected_chunk_ids": [
+        "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75:000001",
+        "042bce59a2aa5be434052d813a66f3b28ceef17b71b24297c8d726b36e29f597:000000"
+      ],
+      "expected_sources": [
+        "security-policy.pdf",
+        "disaster-recovery.pdf"
+      ],
+      "retrieval_status": "reranked",
+      "retrieved_chunk_ids": [
+        "042bce59a2aa5be434052d813a66f3b28ceef17b71b24297c8d726b36e29f597:000000",
+        "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75:000001",
+        "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449:000000",
+        "042bce59a2aa5be434052d813a66f3b28ceef17b71b24297c8d726b36e29f597:000001"
+      ],
+      "retrieved_sources": [
+        "disaster-recovery.pdf",
+        "security-policy.pdf",
+        "support-sla.pdf",
+        "disaster-recovery.pdf"
+      ],
+      "recall_at_k": 1.0,
+      "reciprocal_rank_at_k": 1.0,
+      "context": [
+        {
+          "text": "Disaster recovery objectives: recovery time objective is 4 hours. Recovery point objective is 1 hour.",
+          "metadata": {
+            "chunk_id": "042bce59a2aa5be434052d813a66f3b28ceef17b71b24297c8d726b36e29f597:000000",
+            "chunk_index": 0.0,
+            "document_id": "042bce59a2aa5be434052d813a66f3b28ceef17b71b24297c8d726b36e29f597",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "09263a83a0cd6cd2bb351228a79b327d8e269e677b4083f2496527504d12b09d",
+            "source": "disaster-recovery.pdf",
+            "vector_score": 0.719268799,
+            "rerank_score": 0.89912134
+          }
+        },
+        {
+          "text": "Customer data backups are encrypted. Backup retention is 35 days, after which backup copies expire.",
+          "metadata": {
+            "chunk_id": "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75:000001",
+            "chunk_index": 1.0,
+            "document_id": "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 1.0,
+            "revision": "446c32020dab608f3d480038e311ad9bf12e1f0bab39ce9f8cc852bf2de68321",
+            "source": "security-policy.pdf",
+            "vector_score": 0.688980162,
+            "rerank_score": 0.44552952
+          }
+        },
+        {
+          "text": "Enterprise support SLA. Priority 1 outages have a first-response target of 15 minutes. Priority 2 incidents have a first-response target of 4 hours.",
+          "metadata": {
+            "chunk_id": "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449:000000",
+            "chunk_index": 0.0,
+            "document_id": "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "c5ddce96c81f3222b2d8fd4b90f5ac5c9fb9d11fb2f396736090c53d74d40a69",
+            "source": "support-sla.pdf",
+            "vector_score": 0.601959229,
+            "rerank_score": 0.0021157034
+          }
+        },
+        {
+          "text": "Disaster recovery exercises run quarterly. The infrastructure team records the results and tracks remedial actions.",
+          "metadata": {
+            "chunk_id": "042bce59a2aa5be434052d813a66f3b28ceef17b71b24297c8d726b36e29f597:000001",
+            "chunk_index": 1.0,
+            "document_id": "042bce59a2aa5be434052d813a66f3b28ceef17b71b24297c8d726b36e29f597",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 1.0,
+            "revision": "09263a83a0cd6cd2bb351228a79b327d8e269e677b4083f2496527504d12b09d",
+            "source": "disaster-recovery.pdf",
+            "vector_score": 0.632988,
+            "rerank_score": 0.00045297583
+          }
+        }
+      ],
+      "failure": false,
+      "expected_answer_points": [
+        {
+          "point": "Retention is 35 days",
+          "aliases": [
+            "35 days"
+          ]
+        },
+        {
+          "point": "RTO is 4 hours",
+          "aliases": [
+            "4 hours",
+            "four hours"
+          ]
+        },
+        {
+          "point": "RPO is 1 hour",
+          "aliases": [
+            "1 hour",
+            "one hour"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "unknown",
+      "question": "What is the CEO personal phone number?",
+      "manual_judgment": null,
+      "expected_chunk_ids": [],
+      "expected_sources": [],
+      "retrieval_status": "reranked",
+      "retrieved_chunk_ids": [
+        "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449:000001",
+        "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000001",
+        "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000000",
+        "4f4be6ebafcb04b6b90722a41c332150215a58b0e457929369edab9d4c96e95c:000000"
+      ],
+      "retrieved_sources": [
+        "support-sla.pdf",
+        "finance-2024.pdf",
+        "finance-2024.pdf",
+        "finance-2022.pdf"
+      ],
+      "recall_at_k": null,
+      "reciprocal_rank_at_k": null,
+      "context": [
+        {
+          "text": "Standard support operates Monday through Friday, 09:00 to 18:00 UTC. Enterprise Priority 1 coverage is available around the clock.",
+          "metadata": {
+            "chunk_id": "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449:000001",
+            "chunk_index": 1.0,
+            "document_id": "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 1.0,
+            "revision": "c5ddce96c81f3222b2d8fd4b90f5ac5c9fb9d11fb2f396736090c53d74d40a69",
+            "source": "support-sla.pdf",
+            "vector_score": 0.606414795,
+            "rerank_score": 2.7108803e-05
+          }
+        },
+        {
+          "text": "Orion Labs financial report FY2023 comparative figures. Total revenue in 2023 was $3,800,000. Operating profit was $620,000.",
+          "metadata": {
+            "chunk_id": "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000001",
+            "chunk_index": 1.0,
+            "document_id": "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 1.0,
+            "revision": "e8da1e7b96d70642a48c300db4d0945a2fb0d9b261dfdcfbc81254fd66593091",
+            "source": "finance-2024.pdf",
+            "vector_score": 0.5444718,
+            "rerank_score": 1.8486755e-05
+          }
+        },
+        {
+          "text": "Orion Labs financial report FY2024. Total revenue for 2024 was $4,500,000. Operating profit was $900,000. Figures are in US dollars.",
+          "metadata": {
+            "chunk_id": "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000000",
+            "chunk_index": 0.0,
+            "document_id": "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "e8da1e7b96d70642a48c300db4d0945a2fb0d9b261dfdcfbc81254fd66593091",
+            "source": "finance-2024.pdf",
+            "vector_score": 0.552558839,
+            "rerank_score": 1.7778551e-05
+          }
+        },
+        {
+          "text": "Archived Orion Labs report for FY2022. Revenue was $3,200,000. This is an older reporting year.",
+          "metadata": {
+            "chunk_id": "4f4be6ebafcb04b6b90722a41c332150215a58b0e457929369edab9d4c96e95c:000000",
+            "chunk_index": 0.0,
+            "document_id": "4f4be6ebafcb04b6b90722a41c332150215a58b0e457929369edab9d4c96e95c",
+            "owner_id": "evaluation-87b5a6e86843ce809ffe3903",
+            "page": 0.0,
+            "revision": "c40200c8647bd50989a6d98001e7f12befe0c41b987ad8ee1ea41ca24f7a5153",
+            "source": "finance-2022.pdf",
+            "vector_score": 0.550514221,
+            "rerank_score": 1.7502925e-05
+          }
+        }
+      ],
+      "failure": false,
+      "expected_answer_points": [
+        {
+          "point": "The documents do not provide this information",
+          "aliases": [
+            "not provided",
+            "do not",
+            "does not",
+            "not contain",
+            "not available",
+            "cannot"
+          ]
+        }
+      ]
+    }
+  ],
+  "failure_cases": [],
+  "mode": "rerank",
+  "k": 4,
+  "dataset_sha256": "87b5a6e86843ce809ffe39036f884590243440372548c18abbd37cff39e1c326",
+  "created_at": "2026-10-12T09:56:30.992604+00:00",
+  "embedding_dimension": 3072,
+  "embedding_model": "models/gemini-embedding-001",
+  "answer_model": null,
+  "manual_review": "Not performed",
+  "corpus_chunks": 24,
+  "candidates": 20,
+  "rerank_model": "bge-reranker-v2-m3",
+  "comparison": {
+    "baseline": "evaluation/reports/vector-baseline.json",
+    "retrieval_metric_deltas": {
+      "recall_at_k": 0.0,
+      "mrr_at_k": 0.05555555555555558
+    },
+    "note": "Retrieval-only comparison; answer/judge averages require matching successful-case coverage. Check fallback and error counts before attributing differences to reranking."
+  }
+}

@@ -1,0 +1,333 @@
+{
+  "version": 1,
+  "description": "Synthetic enterprise facts and distractors; author-assigned relevance labels, not independently human-verified.",
+  "documents": [
+    {
+      "document_id": "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529",
+      "source": "finance-2024.pdf",
+      "pages": [
+        "Orion Labs financial report FY2024. Total revenue for 2024 was $4,500,000. Operating profit was $900,000. Figures are in US dollars.",
+        "Orion Labs financial report FY2023 comparative figures. Total revenue in 2023 was $3,800,000. Operating profit was $620,000."
+      ]
+    },
+    {
+      "document_id": "4f4be6ebafcb04b6b90722a41c332150215a58b0e457929369edab9d4c96e95c",
+      "source": "finance-2022.pdf",
+      "pages": [
+        "Archived Orion Labs report for FY2022. Revenue was $3,200,000. This is an older reporting year.",
+        "The financial year ends on December 31. Audit preparation begins in January."
+      ]
+    },
+    {
+      "document_id": "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25",
+      "source": "travel-policy.pdf",
+      "pages": [
+        "Travel expense policy effective January 2025. Employees must submit expense claims within 30 days of completing travel. Receipts are mandatory for every hotel expense.",
+        "Travel policy: domestic hotel reimbursement is capped at $180 per night. International hotels require manager approval before booking."
+      ]
+    },
+    {
+      "document_id": "089f48bd17c118d914b3fd2071eade435bb987961b0a54e85b6f59a9458be55c",
+      "source": "travel-policy-archived.pdf",
+      "pages": [
+        "Archived 2021 travel policy, no longer active. Expense claims had a 60-day submission deadline. The current policy replaces this deadline.",
+        "Archived hotel cap was $140 per night. This document must not be treated as the current travel policy."
+      ]
+    },
+    {
+      "document_id": "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75",
+      "source": "security-policy.pdf",
+      "pages": [
+        "Security incident response policy. Report a suspected security incident within 1 hour to the security team. Rotate affected credentials immediately.",
+        "Customer data backups are encrypted. Backup retention is 35 days, after which backup copies expire."
+      ]
+    },
+    {
+      "document_id": "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449",
+      "source": "support-sla.pdf",
+      "pages": [
+        "Enterprise support SLA. Priority 1 outages have a first-response target of 15 minutes. Priority 2 incidents have a first-response target of 4 hours.",
+        "Standard support operates Monday through Friday, 09:00 to 18:00 UTC. Enterprise Priority 1 coverage is available around the clock."
+      ]
+    },
+    {
+      "document_id": "dd12e0f6e337b91fa66c39b38caa8f08bd16054921d2fe69cdc296a9c438ecb3",
+      "source": "onboarding.pdf",
+      "pages": [
+        "New hires complete security training within 7 days of their start date. Device encryption must be enabled before accessing customer systems.",
+        "Onboarding assigns a mentor on day one. The mentor schedules a check-in after two weeks."
+      ]
+    },
+    {
+      "document_id": "20b27450c0ce24a4525206474f92e2dfce702ac6810941810e2db374b9fe8c14",
+      "source": "leave-policy.pdf",
+      "pages": [
+        "Employees receive 20 days of annual leave per calendar year. Up to 5 unused days can be carried into the next year.",
+        "Parental leave requests go to the people operations team. This policy does not specify a parental leave duration."
+      ]
+    },
+    {
+      "document_id": "5b7844611b3b4705ed17a6c7bf72f32d04f6020e1b568771620f2a6af1e1158c",
+      "source": "vendor-contract.pdf",
+      "pages": [
+        "Vendor contract termination requires 45 days of written notice. Material breach triggers a 10-day cure period before termination.",
+        "The vendor contract is governed by the agreed commercial terms. Annual contract value is $120,000."
+      ]
+    },
+    {
+      "document_id": "8626d8cdffc74e80984e17e6a69fdb188768e12efd08ba9abb8bb2f490ce50d9",
+      "source": "product-guide.pdf",
+      "pages": [
+        "The Atlas document export feature supports PDF and CSV. Exports can be requested from the Reports menu.",
+        "The Atlas product supports English and Spanish interfaces. Offline synchronization is not supported."
+      ]
+    },
+    {
+      "document_id": "042bce59a2aa5be434052d813a66f3b28ceef17b71b24297c8d726b36e29f597",
+      "source": "disaster-recovery.pdf",
+      "pages": [
+        "Disaster recovery objectives: recovery time objective is 4 hours. Recovery point objective is 1 hour.",
+        "Disaster recovery exercises run quarterly. The infrastructure team records the results and tracks remedial actions."
+      ]
+    },
+    {
+      "document_id": "fa3bd4b175938ad771238941389c81bfd285a9eb459011298baf4486dd96ffda",
+      "source": "procurement.pdf",
+      "pages": [
+        "Purchases above $10,000 require finance approval and two vendor quotations. Purchases at or below $10,000 require manager approval.",
+        "Purchase orders must precede vendor invoicing. Invoices are normally paid within 30 days of receipt."
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "revenue",
+      "question": "What was Orion Labs revenue in 2024?",
+      "relevant_chunk_ids": [
+        "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000000"
+      ],
+      "relevant_sources": [
+        "finance-2024.pdf"
+      ],
+      "expected_answer_points": [
+        {
+          "point": "Revenue was $4,500,000",
+          "aliases": [
+            "4,500,000",
+            "4.5 million"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "revenue-comparison",
+      "question": "Compare Orion Labs revenue in 2024 and 2023.",
+      "relevant_chunk_ids": [
+        "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000000",
+        "f2ce1cdb80c75b8f9d929fa561a8d2edb2543e7e0fc9de2ae16d32523e1d2529:000001"
+      ],
+      "relevant_sources": [
+        "finance-2024.pdf"
+      ],
+      "expected_answer_points": [
+        {
+          "point": "2024 revenue was $4,500,000",
+          "aliases": [
+            "4,500,000",
+            "4.5 million"
+          ]
+        },
+        {
+          "point": "2023 revenue was $3,800,000",
+          "aliases": [
+            "3,800,000",
+            "3.8 million"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "current-expenses",
+      "question": "Under the current travel policy, how soon must I claim expenses?",
+      "relevant_chunk_ids": [
+        "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25:000000"
+      ],
+      "relevant_sources": [
+        "travel-policy.pdf"
+      ],
+      "expected_answer_points": [
+        {
+          "point": "Claims are due within 30 days",
+          "aliases": [
+            "30 days"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hotel",
+      "question": "What is the current domestic hotel cap, and are receipts required?",
+      "relevant_chunk_ids": [
+        "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25:000000",
+        "0885b891b5d8662a17be0fb3846dc298567fbc35b569c3e4c032b4703bda9e25:000001"
+      ],
+      "relevant_sources": [
+        "travel-policy.pdf"
+      ],
+      "expected_answer_points": [
+        {
+          "point": "Cap is $180 per night",
+          "aliases": [
+            "180"
+          ]
+        },
+        {
+          "point": "Hotel receipts are mandatory",
+          "aliases": [
+            "receipt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "security",
+      "question": "How quickly must I report a suspected security incident, and what should I do with affected credentials?",
+      "relevant_chunk_ids": [
+        "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75:000000"
+      ],
+      "relevant_sources": [
+        "security-policy.pdf"
+      ],
+      "expected_answer_points": [
+        {
+          "point": "Report within 1 hour",
+          "aliases": [
+            "1 hour",
+            "one hour"
+          ]
+        },
+        {
+          "point": "Rotate affected credentials immediately",
+          "aliases": [
+            "rotat"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sla",
+      "question": "Compare the response targets for Priority 1 and Priority 2 support.",
+      "relevant_chunk_ids": [
+        "e3b0f45452653873c1879912ac82fdddad0ca75dcecf58741e5e6bbf9ff57449:000000"
+      ],
+      "relevant_sources": [
+        "support-sla.pdf"
+      ],
+      "expected_answer_points": [
+        {
+          "point": "P1 is 15 minutes",
+          "aliases": [
+            "15 minutes"
+          ]
+        },
+        {
+          "point": "P2 is 4 hours",
+          "aliases": [
+            "4 hours",
+            "four hours"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "new-hire",
+      "question": "When must a new hire finish security training?",
+      "relevant_chunk_ids": [
+        "dd12e0f6e337b91fa66c39b38caa8f08bd16054921d2fe69cdc296a9c438ecb3:000000"
+      ],
+      "relevant_sources": [
+        "onboarding.pdf"
+      ],
+      "expected_answer_points": [
+        {
+          "point": "Within 7 days",
+          "aliases": [
+            "7 days",
+            "seven days"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "termination",
+      "question": "How much notice is required to terminate the vendor contract?",
+      "relevant_chunk_ids": [
+        "5b7844611b3b4705ed17a6c7bf72f32d04f6020e1b568771620f2a6af1e1158c:000000"
+      ],
+      "relevant_sources": [
+        "vendor-contract.pdf"
+      ],
+      "expected_answer_points": [
+        {
+          "point": "45 days written notice",
+          "aliases": [
+            "45 days"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "backup-vs-recovery",
+      "question": "What is backup retention and what are the recovery time and recovery point objectives?",
+      "relevant_chunk_ids": [
+        "a8221f882a24ebe5dffd5a4500c06123ed0f578cc75bbcdff648eb0f0b523b75:000001",
+        "042bce59a2aa5be434052d813a66f3b28ceef17b71b24297c8d726b36e29f597:000000"
+      ],
+      "relevant_sources": [
+        "security-policy.pdf",
+        "disaster-recovery.pdf"
+      ],
+      "expected_answer_points": [
+        {
+          "point": "Retention is 35 days",
+          "aliases": [
+            "35 days"
+          ]
+        },
+        {
+          "point": "RTO is 4 hours",
+          "aliases": [
+            "4 hours",
+            "four hours"
+          ]
+        },
+        {
+          "point": "RPO is 1 hour",
+          "aliases": [
+            "1 hour",
+            "one hour"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unknown",
+      "question": "What is the CEO personal phone number?",
+      "relevant_chunk_ids": [],
+      "relevant_sources": [],
+      "expected_answer_points": [
+        {
+          "point": "The documents do not provide this information",
+          "aliases": [
+            "not provided",
+            "do not",
+            "does not",
+            "not contain",
+            "not available",
+            "cannot"
+          ]
+        }
+      ]
+    }
+  ]
+}

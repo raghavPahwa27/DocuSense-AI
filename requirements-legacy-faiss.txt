@@ -1,0 +1,4 @@
+# Optional: only needed for read-only inspection or rollback to the old Git revision.
+# Not imported by the migrated application. Preserve existing FAISS files.
+faiss-cpu==1.8.0
+numpy==1.26.4

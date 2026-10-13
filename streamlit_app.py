@@ -1,34 +1,16 @@
 import os
-import hashlib
+import uuid
+from html import escape
+from urllib.parse import urlparse
 from pathlib import Path
 import streamlit as st
-from dotenv import load_dotenv
-
-import numpy as np
-import faiss as faiss_lib
-
-from langchain_core.embeddings import Embeddings as _LCEmbeddings
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain_community.vectorstores import FAISS
-from langchain_community.docstore.in_memory import InMemoryDocstore
-from langchain_community.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.tools import Tool
-from langchain import hub
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain_experimental.tools import PythonREPLTool
-from duckduckgo_search import DDGS as _DDGS
 from langchain.memory import ConversationBufferWindowMemory
+from docusense.config import Settings, DocuSenseError, CHUNK_SIZE, CHUNK_OVERLAP, ROOT
+from docusense.store import connect_store, digest
+from docusense.agent import build_agent
+from docusense.errors import agent_error_message
 
-# ── Config ─────────────────────────────────────────────────────────────────────
-load_dotenv(dotenv_path=Path(__file__).parent / ".env")
-GOOGLE_API_KEY  = os.getenv("GOOGLE_API_KEY")
-FAISS_INDEX_DIR = str(Path(__file__).parent / "faiss_store")
-UPLOADS_DIR     = str(Path(__file__).parent / "uploads")
-CHUNK_SIZE      = 1000
-CHUNK_OVERLAP   = 150
-
-os.makedirs(UPLOADS_DIR, exist_ok=True)
+UPLOADS_DIR = ROOT / 'uploads' / 'sessions'
 
 # ── Page setup ─────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="DocuSense AI", page_icon="🧠", layout="wide")
@@ -125,283 +107,6 @@ hr { border-color: #30363d !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Cosine-similarity FAISS helpers ───────────────────────────────────────────
-#
-# FAISS IndexFlatIP + L2-normalised embeddings == cosine similarity retrieval.
-#   cosine(a, b) = a·b  when ‖a‖ = ‖b‖ = 1
-#
-# _embed_and_normalise()  → normalise a batch of raw embedding vectors.
-# _build_cosine_index()   → create a brand-new IndexFlatIP from documents.
-# _extend_cosine_index()  → add new documents to an existing IndexFlatIP.
-#
-# These helpers are used by both ingest_document() and build_agent() so that
-# the normalisation contract is enforced in exactly one place.
-
-def _embed_and_normalise(
-    texts: list,
-    embedding_model: GoogleGenerativeAIEmbeddings,
-) -> np.ndarray:
-    """Embed *texts* and return L2-normalised float32 vectors."""
-    raw  = embedding_model.embed_documents(texts)
-    vecs = np.array(raw, dtype=np.float32)
-    faiss_lib.normalize_L2(vecs)           # in-place unit-normalisation
-    return vecs
-
-
-def _build_cosine_index(
-    documents: list,
-    embedding_model: GoogleGenerativeAIEmbeddings,
-) -> FAISS:
-    """
-    Build a new LangChain FAISS store backed by IndexFlatIP.
-    Documents are embedded and L2-normalised before insertion.
-    """
-    texts   = [doc.page_content for doc in documents]
-    vectors = _embed_and_normalise(texts, embedding_model)
-    dim     = vectors.shape[1]
-
-    index = faiss_lib.IndexFlatIP(dim)
-    index.add(vectors)
-
-    index_to_docstore_id = {i: str(i) for i in range(len(documents))}
-    docstore = InMemoryDocstore(
-        {str(i): doc for i, doc in enumerate(documents)}
-    )
-    return FAISS(
-        embedding_function   = embedding_model,
-        index                = index,
-        docstore             = docstore,
-        index_to_docstore_id = index_to_docstore_id,
-    )
-
-
-def _extend_cosine_index(
-    existing: FAISS,
-    documents: list,
-    embedding_model: GoogleGenerativeAIEmbeddings,
-) -> None:
-    """
-    Add *documents* to an existing cosine FAISS store in-place.
-    Embeddings are L2-normalised to match the existing IndexFlatIP.
-    """
-    texts   = [doc.page_content for doc in documents]
-    vectors = _embed_and_normalise(texts, embedding_model)
-
-    start_id = existing.index.ntotal
-    existing.index.add(vectors)
-    for i, doc in enumerate(documents):
-        doc_id = str(start_id + i)
-        existing.index_to_docstore_id[start_id + i] = doc_id
-        existing.docstore.add({doc_id: doc})
-
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
-def get_file_hash(file_bytes: bytes) -> str:
-    """MD5 of file content — used for duplicate detection."""
-    return hashlib.md5(file_bytes).hexdigest()
-
-def ingest_document(file_path: str, doc_name: str) -> int:
-    """
-    Synchronous ingestion pipeline:
-        Load PDF → split into chunks → Gemini embeddings (L2-normalised)
-        → update IndexFlatIP FAISS → save.
-
-    If a FAISS index already exists on disk, loads it and adds the new
-    normalised vectors so cosine similarity is preserved for all chunks.
-    Returns the number of chunks created.
-    """
-    # 1. Load PDF pages
-    loader = PyPDFLoader(file_path)
-    pages  = loader.load()
-
-    # 2. Split into overlapping chunks
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size    = CHUNK_SIZE,
-        chunk_overlap = CHUNK_OVERLAP,
-    )
-    chunks = splitter.split_documents(pages)
-
-    # 3. Attach source metadata to every chunk
-    for i, chunk in enumerate(chunks):
-        chunk.metadata["source"]      = doc_name
-        chunk.metadata["page"]        = chunk.metadata.get("page", 0)
-        chunk.metadata["chunk_index"] = i
-
-    # 4. Embed (normalised) and persist to FAISS
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
-    if os.path.exists(FAISS_INDEX_DIR) and os.path.exists(
-        os.path.join(FAISS_INDEX_DIR, "index.faiss")
-    ):
-        # Load existing IndexFlatIP store and extend with normalised vectors
-        index = FAISS.load_local(
-            FAISS_INDEX_DIR, embeddings, allow_dangerous_deserialization=True
-        )
-        _extend_cosine_index(index, chunks, embeddings)
-    else:
-        # First document — build a fresh cosine index
-        index = _build_cosine_index(chunks, embeddings)
-    index.save_local(FAISS_INDEX_DIR)
-    return len(chunks)
-
-# ── Web Search Tool with Evidence Capture ──────────────────────────────────────
-class WebSearchTool:
-    """
-    Wraps DDGS to give the ReAct agent plain-text search results while
-    side-storing structured {title, url, snippet} evidence for display.
-
-    Evidence is captured at the tool-result level — the LLM never sees or
-    generates URLs; they come directly from the DDGS API response.
-    """
-
-    def reset(self) -> None:
-        """Clear evidence before each new agent invocation."""
-        self._evidence: list[dict] = []
-        self._seen_urls: set[str]  = set()
-
-    def __init__(self) -> None:
-        self.reset()
-
-    @property
-    def evidence(self) -> list[dict]:
-        return self._evidence
-
-    def run(self, query: str) -> str:
-        with _DDGS() as ddgs:
-            raw = list(ddgs.text(query, max_results=5))
-        text_parts = []
-        for item in raw:
-            url = item.get("href", "")
-            # Deduplicate across multiple calls in the same agent run
-            if url and url not in self._seen_urls:
-                self._evidence.append({
-                    "title":   item.get("title", ""),
-                    "url":     url,
-                    "snippet": item.get("body",  ""),
-                })
-                self._seen_urls.add(url)
-            text_parts.append(f"{item.get('title', '')}: {item.get('body', '')}")
-        return "\n\n".join(text_parts)
-
-# ── Agent builder ──────────────────────────────────────────────────────────────
-def build_agent(memory: ConversationBufferWindowMemory):
-    """
-    Load the persisted FAISS index and construct a fresh AgentExecutor.
-
-    Called once when the first document is ready, and again whenever a new
-    document is added (to reload FAISS with the updated index).
-    The memory object is passed in so conversations survive rebuilds.
-
-    Returns (AgentExecutor, WebSearchTool) or (None, None) if no FAISS index.
-    """
-    if not os.path.exists(FAISS_INDEX_DIR):
-        return None, None
-
-    # Load the IndexFlatIP FAISS index from disk.
-    # Query vectors must also be L2-normalised at retrieval time so that the
-    # inner-product score equals cosine similarity.  We achieve this via a thin
-    # Embeddings subclass that normalises the output of embed_query().
-    _base_embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
-
-    class _NormalisingEmbeddings(_LCEmbeddings):
-        """
-        LangChain Embeddings adapter that L2-normalises query embeddings.
-        Document embeddings were already normalised at index-build / ingest time
-        (via _embed_and_normalise).  This ensures query vectors are also on the
-        unit sphere so IndexFlatIP inner-product == cosine similarity.
-        Inheriting from langchain_core.embeddings.Embeddings satisfies the type
-        contract; __call__ handles the legacy path that calls embedding_function
-        as a bare callable inside langchain_community FAISS internals.
-        """
-        def embed_documents(self, texts: list) -> list:
-            return _base_embeddings.embed_documents(texts)
-
-        def embed_query(self, text: str) -> list:
-            raw = _base_embeddings.embed_query(text)
-            vec = np.array([raw], dtype=np.float32)
-            faiss_lib.normalize_L2(vec)       # in-place unit-normalisation
-            return vec[0].tolist()
-
-        # Legacy callable path used by some LangChain FAISS internals
-        def __call__(self, text: str) -> list:
-            return self.embed_query(text)
-
-        def __getattr__(self, name):
-            return getattr(_base_embeddings, name)
-
-    embeddings   = _NormalisingEmbeddings()
-    vector_store = FAISS.load_local(
-        FAISS_INDEX_DIR, embeddings, allow_dangerous_deserialization=True
-    )
-    retriever = vector_store.as_retriever(search_kwargs={"k": 4})
-
-    # ── Tool 1: Document Retrieval ─────────────────────────────────────────────
-    def retrieve_documents(query: str) -> str:
-        docs  = retriever.invoke(query)
-        parts = []
-        for doc in docs:
-            src  = doc.metadata.get("source", "unknown")
-            page = doc.metadata.get("page", "?")
-            parts.append(f"[{src} | page {page}]\n{doc.page_content}")
-        return "\n\n".join(parts)
-
-    document_retrieval_tool = Tool(
-        name        = "document_retrieval",
-        func        = retrieve_documents,
-        description = (
-            "Search and retrieve information from uploaded documents. "
-            "Returns relevant text chunks with source file and page number. "
-            "Use this for any question about the uploaded PDFs."
-        ),
-    )
-
-    # ── Tool 2: Calculator ─────────────────────────────────────────────────────
-    calculator_tool             = PythonREPLTool()
-    calculator_tool.name        = "calculator"
-    calculator_tool.description = (
-        "Evaluate mathematical expressions using Python. "
-        "Input must be a valid Python expression, e.g. '0.15 * 4500000'."
-    )
-
-    # ── Tool 3: Web Search (with evidence capture) ─────────────────────────────
-    # WebSearchTool.run() returns plain text to the LLM and simultaneously
-    # populates WebSearchTool.evidence with {title, url, snippet} dicts.
-    web_searcher    = WebSearchTool()
-    web_search_tool = Tool(
-        name        = "web_search",
-        func        = web_searcher.run,
-        description = (
-            "Search the public web using DuckDuckGo. Use for current events, "
-            "general knowledge, or anything not found in the uploaded documents."
-        ),
-    )
-
-    tools = [document_retrieval_tool, calculator_tool, web_search_tool]
-
-    # ── ReAct Agent with conversational memory ─────────────────────────────────
-    llm = ChatGoogleGenerativeAI(
-        model          = "gemini-3.6-flash",
-        google_api_key = GOOGLE_API_KEY,
-        temperature    = 0,
-    )
-    # hwchase17/react-chat includes {chat_history} — required for memory to work
-    react_prompt = hub.pull("hwchase17/react-chat")
-    agent        = create_react_agent(llm=llm, tools=tools, prompt=react_prompt)
-
-    executor = AgentExecutor(
-        agent                     = agent,
-        tools                     = tools,
-        memory                    = memory,
-        verbose                   = False,
-        handle_parsing_errors     = (
-            "Check your output format. You must use "
-            "Thought/Action/Action Input or Thought/Final Answer."
-        ),
-        max_iterations            = 10,
-        early_stopping_method     = "generate",
-        return_intermediate_steps = True,
-    )
-    return executor, web_searcher
-
 # ── Session state ──────────────────────────────────────────────────────────────
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferWindowMemory(
@@ -417,15 +122,39 @@ if "web_searcher"      not in st.session_state:
 if "chat_history"      not in st.session_state:
     st.session_state.chat_history      = []
 if "processed_hashes"  not in st.session_state:
-    st.session_state.processed_hashes  = set()   # MD5s of ingested files
+    st.session_state.processed_hashes  = set()   # SHA-256 IDs of ingested files
 if "doc_names"         not in st.session_state:
     st.session_state.doc_names         = {}       # hash → filename
 
-# If the app restarts but faiss_store/ already exists, rebuild the agent once
-if st.session_state.agent_executor is None and os.path.exists(FAISS_INDEX_DIR):
-    executor, searcher = build_agent(st.session_state.memory)
-    st.session_state.agent_executor = executor
-    st.session_state.web_searcher   = searcher
+# Never use a process-wide owner or a cached cross-session agent/store.
+if "owner_id" not in st.session_state:
+    st.session_state.owner_id = uuid.uuid4().hex
+if "store" not in st.session_state:
+    st.session_state.store = None
+settings = None
+try:
+    # Streamlit 1.38 renders an error before raising on a missing secrets file.
+    # Its optional loader avoids that UI error for valid .env-only setups.
+    secrets = dict(st.secrets) if st.secrets.load_if_toml_exists() else {}
+    settings = Settings.load(secrets)
+except DocuSenseError as exc:
+    st.warning(str(exc))
+
+# Rebuild cached agents when chat configuration changes, preserving conversation memory.
+if settings is not None:
+    chat_configuration = (settings.llm_provider, settings.chat_model,
+                          digest((settings.groq_api_key if settings.llm_provider == "groq" else settings.google_api_key).encode()))
+    if st.session_state.get("chat_configuration") != chat_configuration:
+        st.session_state.agent_executor = None
+        st.session_state.web_searcher = None
+        st.session_state.chat_configuration = chat_configuration
+
+def session_store():
+    if settings is None:
+        raise DocuSenseError("Configure chat, embedding, and Pinecone credentials first.")
+    if st.session_state.store is None:
+        st.session_state.store = connect_store(settings, st.session_state.owner_id)
+    return st.session_state.store
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -441,30 +170,65 @@ with st.sidebar:
     if uploaded_files:
         new_files = []
         for uf in uploaded_files:
-            file_bytes = uf.read()
-            file_hash  = get_file_hash(file_bytes)
+            file_bytes = uf.getvalue()
+            file_hash  = digest(file_bytes)
             if file_hash not in st.session_state.processed_hashes:
                 new_files.append((uf.name, file_hash, file_bytes))
 
         if new_files:
             for doc_name, file_hash, file_bytes in new_files:
-                save_path = os.path.join(UPLOADS_DIR, f"{file_hash}.pdf")
-                with open(save_path, "wb") as fh:
-                    fh.write(file_bytes)
+                try:
+                    owner_dir = UPLOADS_DIR / st.session_state.owner_id
+                    owner_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+                    save_path = owner_dir / f"{file_hash}.pdf"
+                    save_path.write_bytes(file_bytes)
+                    save_path.chmod(0o600)
+                    with st.spinner(f"⚙️ Processing **{doc_name}** …"):
+                        result = session_store().ingest_pdf(save_path, doc_name)
+                    st.session_state.processed_hashes.add(file_hash)
+                    st.session_state.doc_names[file_hash] = doc_name
+                    st.success(f"✅ {doc_name} — {result.chunk_count} chunks indexed")
+                except DocuSenseError as exc:
+                    st.error(str(exc))
+                except OSError:
+                    st.error("Cannot save the upload. Check local storage permissions.")
 
-                with st.spinner(f"⚙️ Processing **{doc_name}** …"):
-                    n_chunks = ingest_document(save_path, doc_name)
-
-                st.session_state.processed_hashes.add(file_hash)
-                st.session_state.doc_names[file_hash] = doc_name
-                st.success(f"✅ {doc_name} — {n_chunks} chunks indexed")
-
-            # Rebuild the agent to pick up newly added vectors
+    if st.session_state.doc_names and st.session_state.agent_executor is None:
+        try:
             with st.spinner("🔄 Updating knowledge base …"):
-                executor, searcher = build_agent(st.session_state.memory)
+                executor, searcher = build_agent(st.session_state.memory, session_store(), settings)
                 st.session_state.agent_executor = executor
-                st.session_state.web_searcher   = searcher
-            st.rerun()
+                st.session_state.web_searcher = searcher
+        except Exception:
+            st.error("Agent initialization failed. Check chat-provider access and LangChain Hub connectivity, then retry.")
+
+    # Document mutations always use this session's store, never a user-supplied owner.
+    if st.session_state.doc_names:
+        with st.expander("Manage documents"):
+            names = dict(st.session_state.doc_names)
+            selected = st.selectbox("Document", list(names), key="managed_document",
+                                    format_func=lambda key, names=names: names[key])
+            if st.button("Re-index selected document"):
+                try:
+                    path = UPLOADS_DIR / st.session_state.owner_id / f"{selected}.pdf"
+                    session_store().ingest_pdf(path, st.session_state.doc_names[selected], reindex=True)
+                    st.session_state.memory.clear()
+                    st.session_state.chat_history = []
+                    st.success("Document re-indexed and verified. Conversation cleared to remove stale context.")
+                except DocuSenseError as exc:
+                    st.error(str(exc))
+            if st.button("Delete selected document from Pinecone"):
+                # Remove old conversation context even if remote deletion needs a retry.
+                st.session_state.memory.clear()
+                st.session_state.chat_history = []
+                try:
+                    session_store().delete_document(selected)
+                    del st.session_state.doc_names[selected]
+                    # Keep processed_hashes so a still-selected upload is not re-ingested.
+                    st.success("Document removed from retrieval. Original PDF remains on disk.")
+                    st.rerun()
+                except DocuSenseError as exc:
+                    st.error(str(exc))
 
     # Document list
     if st.session_state.doc_names:
@@ -476,12 +240,13 @@ with st.sidebar:
     st.markdown("### ⚙️ Settings")
     st.markdown(f"""
     <div style="font-size:0.82rem; color:#8b949e; line-height:1.8;">
-    <b style="color:#e6edf3;">Model</b>&nbsp;&nbsp; gemini-3.6-flash<br>
+    <b style="color:#e6edf3;">Model</b>&nbsp;&nbsp; {escape(settings.chat_model) if settings else "not configured"}<br>
     <b style="color:#e6edf3;">Embeddings</b>&nbsp;&nbsp; gemini-embedding-001<br>
     <b style="color:#e6edf3;">Memory</b>&nbsp;&nbsp; last 5 exchanges<br>
     <b style="color:#e6edf3;">Chunk size</b>&nbsp;&nbsp; {CHUNK_SIZE} chars<br>
     <b style="color:#e6edf3;">Overlap</b>&nbsp;&nbsp; {CHUNK_OVERLAP} chars<br>
-    <b style="color:#e6edf3;">Top-k chunks</b>&nbsp;&nbsp; 4
+    <b style="color:#e6edf3;">Top-k chunks</b>&nbsp;&nbsp; {settings.top_k if settings else 4}<br>
+    <b style="color:#e6edf3;">Reranking</b>&nbsp;&nbsp; {"enabled" if settings and settings.rerank_enabled else "disabled"}
     </div>
     """, unsafe_allow_html=True)
 
@@ -501,7 +266,7 @@ with st.sidebar:
 # ── Hero ───────────────────────────────────────────────────────────────────────
 st.markdown("""
 <p class="hero-title">🧠 DocuSense AI</p>
-<p class="hero-sub">Agentic Enterprise Knowledge Assistant &nbsp;·&nbsp; ReAct · Gemini · FAISS · Memory</p>
+<p class="hero-sub">Agentic Enterprise Knowledge Assistant &nbsp;·&nbsp; ReAct · Pinecone · Memory</p>
 """, unsafe_allow_html=True)
 
 st.markdown("---")
@@ -514,7 +279,7 @@ if st.session_state.agent_executor:
     st.markdown(f"""
     <div class="stat-row">
         <div class="stat-badge"><span>{n_docs}</span>Document(s) Indexed</div>
-        <div class="stat-badge"><span>FAISS</span>Vector Store</div>
+        <div class="stat-badge"><span>Pinecone</span>Vector Store</div>
         <div class="stat-badge"><span>5-turn</span>Chat Memory</div>
         <div class="stat-badge"><span>ReAct</span>Agent Mode</div>
     </div>
@@ -527,7 +292,7 @@ if st.session_state.agent_executor:
         st.markdown(f"""
         <div class="msg-user">
             <div class="msg-label user">You</div>
-            {entry['q']}
+            {escape(entry['q'])}
         </div>
         """, unsafe_allow_html=True)
 
@@ -537,12 +302,12 @@ if st.session_state.agent_executor:
                     emoji = TOOL_EMOJI.get(action.tool, "🔧")
                     st.markdown(f"""
                     <div class="trace-step">
-                        <div class="trace-tool">{emoji} Tool: {action.tool}</div>
+                        <div class="trace-tool">{emoji} Tool: {escape(action.tool)}</div>
                         <div style="color:#58a6ff; font-size:0.82rem; margin:3px 0;">
-                            Input: {action.tool_input}
+                            Input: {escape(str(action.tool_input))}
                         </div>
                         <div class="trace-obs">
-                            Observation: {str(observation)[:400]}{"..." if len(str(observation)) > 400 else ""}
+                            Observation: {escape(str(observation)[:400])}{"..." if len(str(observation)) > 400 else ""}
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -552,24 +317,33 @@ if st.session_state.agent_executor:
         st.markdown(f"""
         <div class="msg-agent">
             <div class="msg-label agent">DocuSense AI</div>
-            {entry['a']}
+            {escape(str(entry['a']))}
         </div>
         """, unsafe_allow_html=True)
+
+        document_sources = entry.get("document_sources", [])
+        if document_sources:
+            with st.expander(f"📚 Document Sources ({len(document_sources)})"):
+                for src in document_sources:
+                    st.text(f"{src['source']} | page {int(src['page']) + 1} | chunk {src['chunk_id']}")
+        if entry.get("retrieval_status", "").startswith("fallback:"):
+            st.caption("Reranking was unavailable; this answer used vector-only retrieval.")
 
         # ── Web Sources (only when web_search was used) ────────────────────────
         sources = entry.get("sources", [])
         if sources:
             with st.expander(f"🌐 Web Sources ({len(sources)})"):
                 for i, src in enumerate(sources, 1):
-                    domain = src["url"].split("/")[2] if src["url"] else ""
+                    domain = escape(urlparse(src["url"]).netloc)
                     st.markdown(f"""
                     <div class="source-card">
-                        <div class="source-title">{i}. {src['title']}</div>
+                        <div class="source-title">{i}. {escape(src['title'])}</div>
                         <div class="source-url">🔗 {domain}</div>
-                        <div class="source-snip">{src['snippet'][:220]}{'...' if len(src['snippet']) > 220 else ''}</div>
+                        <div class="source-snip">{escape(src['snippet'][:220])}{'...' if len(src['snippet']) > 220 else ''}</div>
                     </div>
                     """, unsafe_allow_html=True)
-                    st.markdown(f"[Open source ↗]({src['url']})")
+                    if urlparse(src["url"]).scheme in {"http", "https"}:
+                        st.markdown(f"[Open source ↗]({src['url']})")
 
     # ── Question input ─────────────────────────────────────────────────────────
     st.markdown("---")
@@ -596,8 +370,12 @@ if st.session_state.agent_executor:
         if st.session_state.web_searcher:
             st.session_state.web_searcher.reset()
 
-        with st.spinner("🤖 Agent is reasoning …"):
-            result = st.session_state.agent_executor.invoke({"input": user_query})
+        try:
+            with st.spinner("🤖 Agent is reasoning …"):
+                result = st.session_state.agent_executor.invoke({"input": user_query})
+        except Exception as exc:
+            st.error(agent_error_message(exc, settings.llm_provider, settings.chat_model))
+            st.stop()
 
         # Evidence is populated by WebSearchTool.run() during the agent run
         sources = (
@@ -609,6 +387,8 @@ if st.session_state.agent_executor:
             "q":       user_query,
             "a":       result["output"],
             "trace":   result.get("intermediate_steps", []),
+            "document_sources": list(st.session_state.web_searcher.document_evidence),
+            "retrieval_status": st.session_state.web_searcher.retrieval_status,
             "sources": sources,   # [{title, url, snippet}] — empty if web_search unused
         })
         st.rerun()
@@ -623,7 +403,7 @@ else:
         </div>
         <div style="font-size: 0.9rem; max-width: 500px; margin: 0 auto; line-height: 1.7;">
             Upload one or more PDFs using the sidebar. Each document is processed
-            immediately — chunked, embedded with Gemini, and stored in FAISS.
+            immediately — chunked, embedded with Gemini, and stored in Pinecone.
             Once done, the ReAct agent can retrieve facts, perform calculations,
             and search the web.
         </div>

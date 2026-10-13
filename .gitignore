@@ -14,3 +14,15 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# Credentials and private local state
+.env.*
+!.env.example
+.streamlit/secrets.toml
+.docusense/
+uploads/
+.pytest_cache/
+.coverage
+htmlcov/
+# Ad-hoc/private evaluation outputs (checked-in reports use synthetic data only)
+evaluation/private-reports/

@@ -2,7 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 import pytest
 from conftest import chunk
-from docusense.retrieval import RAGRetriever
+from docusense.rag import RAGRetriever
 
 
 def retriever(rows=None, names=None):

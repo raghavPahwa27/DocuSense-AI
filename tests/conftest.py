@@ -2,7 +2,7 @@ from copy import deepcopy
 from types import SimpleNamespace
 import pytest
 from docusense.config import Settings
-from docusense.store import PineconeStore
+from docusense.document_manager import DocumentManager
 from langchain_core.documents import Document
 
 
@@ -47,7 +47,7 @@ def setup_store(tmp_path):
     client = FakeClient()
     settings = Settings('private-google-key', 'private-pinecone-key', 'test', tmp_path)
     def factory(owner='alice'):
-        return PineconeStore(client, FakeEmbeddings(), settings, owner, verify_attempts=1)
+        return DocumentManager(client, FakeEmbeddings(), settings, owner, verify_attempts=1)
     return factory, client
 
 

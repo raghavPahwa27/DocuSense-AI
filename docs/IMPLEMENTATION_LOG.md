@@ -84,6 +84,12 @@ A live request returned 404 `model_not_found` for `llama-3.3-70b-versatile`; the
 
 Live verification: GPT-OSS used the calculator for 17 * 23, returned 391, and saved the exchange in memory. Added provider-specific redacted errors, configuration-aware cached-agent rebuilding, and adapter regression tests. **47 tests passed.** Restarted Streamlit to reload `.env`; session reset does not delete saved PDFs or Pinecone data. Gemini embeddings remain unchanged.
 
+## Follow-up: interview-friendly architecture refactor
+
+Created `codex/simplify-docusense` from the working Pinecone version. The active application now has six main modules: the Streamlit UI plus `agent.py`, `rag.py`, `tools.py`, `document_manager.py`, and `config.py`. The small `llm.py`, `errors.py`, `calculator.py`, `react_adapter.py`, `retrieval.py`, and `store.py` modules were absorbed into their related modules. The date-only executor wrapper was replaced by `ask_agent`; the source-capture helper is now in `tools.py`. `app.py` remains a small CLI using the same code paths. Historical migration scripts were moved to `scripts/archive/`.
+
+The SQLite manifest, deterministic revision IDs, verification before publication, hidden pending deletion, session namespaces, owner filters, and returned-metadata checks remain because they prevent partial uploads, stale revisions, failed deletions, and cross-session results from becoming visible. No live Pinecone data was changed during this refactor. Baseline and final suites each had **55 passed, 0 failed, 0 skipped**. `pip check` passed; the CLI and archived migration script help commands worked; Streamlit started on a temporary local port and its health endpoint returned HTTP 200. Live model answer quality and private citation correctness were not re-evaluated by these checks.
+
 ## Follow-up: multi-part question coverage
 
 The agent prompt now requires identifying and answering every distinct part of a user message, using numbered points or clear sections in the original order. Document-specific parts continue through `document_retrieval`, while general questions can be answered directly; unsupported parts must be called out while the answer continues for supported parts. The date shortcut is restricted to date-only questions so a mixed document/date question is delegated to the normal ReAct flow with the trusted time context. **55 tests passed.**

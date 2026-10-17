@@ -1,18 +1,60 @@
-from .llm import build_chat_model
-from langchain.tools import Tool
 from langchain import hub
 from langchain.agents import AgentExecutor, create_react_agent
-from .calculator import calculate
-from duckduckgo_search import DDGS as _DDGS
-from langchain.memory import ConversationBufferWindowMemory
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from .config import DocuSenseError
-from .retrieval import configured_retriever
+from .rag import configured_retriever
+from .tools import build_tools
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import re
 from typing import Optional
 
 _INDIA_TZ = ZoneInfo("Asia/Kolkata")
+
+
+def build_chat_model(settings):
+    if settings.llm_provider == 'groq':
+        return ChatGroq(model=settings.chat_model, api_key=settings.groq_api_key,
+                        temperature=0, timeout=30, max_retries=1)
+    return ChatGoogleGenerativeAI(model=settings.chat_model,
+                                 google_api_key=settings.google_api_key, temperature=0)
+
+
+def agent_error_message(error, provider, model):
+    status = getattr(error, 'status_code', None)
+    if status == 404:
+        return f'{provider.title()} could not find or grant access to chat model {model}. Select an available model and retry.'
+    if status in (401, 403):
+        return f'{provider.title()} rejected access. Check the configured chat API key and its permissions.'
+    if status == 429:
+        return f'{provider.title()} rate limit or quota reached. Wait for the limit to reset or check your account quota.'
+    if type(error).__name__ in ('APIConnectionError', 'APITimeoutError', 'TimeoutError'):
+        return f'Cannot reach {provider.title()}. Check connectivity and retry.'
+    if status == 400:
+        return f'{provider.title()} rejected the chat request. The model may not support the request settings or the context may exceed its limit.'
+    return 'Agent request failed. Please retry; if it persists, check provider availability and application configuration.'
+
+
+def to_react_text(message):
+    """Translate GPT-OSS native calls into the existing ReAct action format."""
+    calls = getattr(message, 'tool_calls', [])
+    if calls:
+        if len(calls) != 1:
+            raise DocuSenseError('The chat model returned multiple actions; retry with one request at a time.')
+        call = calls[0]
+        if call['name'] not in {'document_retrieval', 'calculator', 'web_search'}:
+            raise DocuSenseError('The chat model requested an unsupported tool.')
+        args = call.get('args', {})
+        if not isinstance(args, dict) or len(args) != 1 or not isinstance(next(iter(args.values())), str):
+            raise DocuSenseError('The chat model returned an invalid tool input.')
+        return f"Action: {call['name']}\nAction Input: {next(iter(args.values()))}"
+    text = str(message.content)
+    if not text.strip():
+        raise DocuSenseError('The chat model returned an empty response. Retry the request.')
+    if 'Action:' in text or 'Final Answer:' in text:
+        return text
+    return 'Final Answer: ' + text
 
 _AGENT_GROUNDING_INSTRUCTIONS = """
 Before answering, identify every distinct question or sub-question in the user's
@@ -47,66 +89,14 @@ def _simple_date_answer(question: str) -> Optional[str]:
     return None
 
 
-class DynamicAgentExecutor:
-    """Keep the existing AgentExecutor while adding per-request trusted time."""
-    def __init__(self, executor):
-        self._executor = executor
-        self.memory = executor.memory
-
-    def invoke(self, inputs, config=None, **kwargs):
-        payload = dict(inputs)
-        payload["current_datetime"] = _now_context()
-        direct = _simple_date_answer(str(payload.get("input", "")))
-        if direct is not None:
-            self.memory.save_context({"input": payload["input"]}, {"output": direct})
-            return {"input": payload["input"], "output": direct, "intermediate_steps": []}
-        return self._executor.invoke(payload, config=config, **kwargs)
-
-    def __getattr__(self, name):
-        return getattr(self._executor, name)
-
-class WebSearchTool:
-    """
-    Wraps DDGS to give the ReAct agent plain-text search results while
-    side-storing structured {title, url, snippet} evidence for display.
-
-    Evidence is captured at the tool-result level — the LLM never sees or
-    generates URLs; they come directly from the DDGS API response.
-    """
-
-    def reset(self) -> None:
-        """Clear evidence before each new agent invocation."""
-        self._evidence: list[dict] = []
-        self._seen_urls: set[str]  = set()
-        self.document_evidence = []
-        self.retrieval_status = "not_run"
-
-    def __init__(self) -> None:
-        self.reset()
-
-    @property
-    def evidence(self) -> list[dict]:
-        return self._evidence
-
-    def run(self, query: str) -> str:
-        try:
-            with _DDGS() as ddgs:
-                raw = list(ddgs.text(query, max_results=5))
-        except Exception:
-            return "[WEB_SEARCH_UNAVAILABLE] No web evidence is available. Do not use this as factual evidence."
-        text_parts = []
-        for item in raw:
-            url = item.get("href", "")
-            # Deduplicate across multiple calls in the same agent run
-            if url and url not in self._seen_urls:
-                self._evidence.append({
-                    "title":   item.get("title", ""),
-                    "url":     url,
-                    "snippet": item.get("body",  ""),
-                })
-                self._seen_urls.add(url)
-            text_parts.append(f"{item.get('title', '')}: {item.get('body', '')}")
-        return "\n\n".join(text_parts) or "[WEB_SEARCH_NO_EVIDENCE] No results were returned. Do not infer facts from this response."
+def ask_agent(executor, question: str):
+    """Add fresh local time to every question; handle date-only requests directly."""
+    payload = {'input': question, 'current_datetime': _now_context()}
+    direct = _simple_date_answer(question)
+    if direct is not None:
+        executor.memory.save_context({'input': question}, {'output': direct})
+        return {'input': question, 'output': direct, 'intermediate_steps': []}
+    return executor.invoke(payload)
 
 def build_agent(memory, store, settings):
     retriever = configured_retriever(store, settings)
@@ -115,58 +105,12 @@ def build_agent(memory, store, settings):
     # timestamp as a second user input key.
     if hasattr(memory, "input_key"):
         memory.input_key = "input"
-    # ── Tool 1: Document Retrieval ─────────────────────────────────────────────
-    def retrieve_documents(query: str) -> str:
-        try:
-            docs = retriever.retrieve(query)
-            web_searcher.retrieval_status = retriever.last_status
-            seen = {d["chunk_id"] for d in web_searcher.document_evidence}
-            web_searcher.document_evidence.extend(dict(d.metadata) for d in docs if d.metadata["chunk_id"] not in seen)
-        except DocuSenseError as exc:
-            return str(exc)
-        parts = []
-        for doc in docs:
-            src  = doc.metadata.get("source", "unknown")
-            page = int(doc.metadata.get("page", 0)) + 1
-            parts.append(f"[{src} | page {page} | chunk {doc.metadata.get('chunk_id', 'unknown')}]\n{doc.page_content}")
-        return "\n\n".join(parts) or "No matching documents in this session."
-
-    document_retrieval_tool = Tool(
-        name        = "document_retrieval",
-        func        = retrieve_documents,
-        description = (
-            "Search and retrieve information from uploaded documents. "
-            "Returns relevant text chunks with source file and page number. "
-            "Use this for any question about the uploaded PDFs."
-        ),
-    )
-
-    # ── Tool 2: Calculator ─────────────────────────────────────────────────────
-    calculator_tool = Tool(name="calculator", func=calculate, description=(
-        "Evaluate numeric arithmetic using Python: +, -, *, /, //, %, parentheses. "
-        "Input an expression such as 0.15 * 4500000."
-    ))
-
-    # ── Tool 3: Web Search (with evidence capture) ─────────────────────────────
-    # WebSearchTool.run() returns plain text to the LLM and simultaneously
-    # populates WebSearchTool.evidence with {title, url, snippet} dicts.
-    web_searcher    = WebSearchTool()
-    web_search_tool = Tool(
-        name        = "web_search",
-        func        = web_searcher.run,
-        description = (
-            "Search the public web using DuckDuckGo. Use for current events, "
-            "general knowledge, or anything not found in the uploaded documents."
-        ),
-    )
-
-    tools = [document_retrieval_tool, calculator_tool, web_search_tool]
+    tools, evidence = build_tools(retriever)
 
     # ── ReAct Agent with conversational memory ─────────────────────────────────
     llm = build_chat_model(settings)
     if settings.llm_provider == 'groq' and settings.chat_model.startswith('openai/gpt-oss-'):
         from langchain_core.runnables import RunnableLambda
-        from .react_adapter import to_react_text
         # GPT-OSS may emit native calls even with a text ReAct prompt. Declare
         # our existing tools and translate calls; AgentExecutor still runs them.
         llm = llm.bind_tools(tools, parallel_tool_calls=False) | RunnableLambda(to_react_text)
@@ -192,5 +136,5 @@ Answer simple questions directly when the answer is in this context. For today's
         early_stopping_method     = "force",
         return_intermediate_steps = True,
     )
-    return DynamicAgentExecutor(executor), web_searcher
+    return executor, evidence
 

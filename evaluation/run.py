@@ -8,7 +8,7 @@ from pathlib import Path
 from langchain_core.documents import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from docusense.config import Settings, CHUNK_SIZE, CHUNK_OVERLAP, DocuSenseError
-from docusense.store import connect_store
+from docusense.document_manager import connect_document_manager
 from .metrics import recall_at_k, reciprocal_rank, mean, answer_proxies
 
 DATASET = Path(__file__).with_name('dataset.json')
@@ -170,8 +170,8 @@ def main():
     dataset, fingerprint = load_dataset(args.dataset)
     settings = Settings.load()
     owner = 'evaluation-' + fingerprint[:24]
-    store = connect_store(settings, owner)
-    from docusense.retrieval import RAGRetriever
+    store = connect_document_manager(settings, owner)
+    from docusense.rag import RAGRetriever
     retriever = RAGRetriever(store, enabled=args.mode == 'rerank', model=args.rerank_model or settings.rerank_model,
                              candidates=args.candidates, top_k=args.k)
     if args.ingest:
@@ -182,7 +182,7 @@ def main():
         raise DocuSenseError('Evaluation corpus is missing. Run with --ingest first.')
     llm = None
     if args.answers:
-        from docusense.llm import build_chat_model
+        from docusense.agent import build_chat_model
         llm = PacedLLM(build_chat_model(settings), args.llm_interval)
     report = evaluate(dataset, retriever.retrieve, args.k,
                       (lambda q,d: answer_with_context(llm,q,d)) if llm else None,

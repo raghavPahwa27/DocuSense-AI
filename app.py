@@ -3,8 +3,8 @@ import argparse
 from pathlib import Path
 from langchain.memory import ConversationBufferWindowMemory
 from docusense.config import Settings, DocuSenseError
-from docusense.store import connect_store
-from docusense.agent import build_agent
+from docusense.document_manager import connect_document_manager
+from docusense.agent import build_agent, ask_agent
 
 
 def main():
@@ -14,20 +14,20 @@ def main():
     args = parser.parse_args()
     try:
         settings = Settings.load()
-        store = connect_store(settings, args.owner_id)
+        store = connect_document_manager(settings, args.owner_id)
         for path in args.pdf:
             result = store.ingest_pdf(path)
             print(f'Indexed {result.chunk_count} chunks; duplicate={result.duplicate}')
         memory = ConversationBufferWindowMemory(memory_key='chat_history', k=5, return_messages=True, output_key='output')
-        agent, searcher = build_agent(memory, store, settings)
+        agent, evidence = build_agent(memory, store, settings)
         while True:
             query = input('\nYou: ').strip()
             if query.lower() in {'exit', 'quit'}:
                 break
             if query:
-                searcher.reset()
+                evidence.reset()
                 try:
-                    result = agent.invoke({'input': query})
+                    result = ask_agent(agent, query)
                     print(result['output'])
                 except Exception:
                     print('Agent request failed. Check chat-provider availability and retry.')

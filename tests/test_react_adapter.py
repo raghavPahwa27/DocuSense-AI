@@ -1,6 +1,6 @@
 import pytest
 from langchain_core.messages import AIMessage
-from docusense.react_adapter import to_react_text
+from docusense.agent import to_react_text
 from docusense.config import DocuSenseError
 
 
@@ -23,7 +23,7 @@ def test_native_call_runs_through_existing_react_executor(monkeypatch, setup_sto
     from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
     from langchain_core.prompts import PromptTemplate
     from langchain.memory import ConversationBufferWindowMemory
-    from docusense.agent import build_agent
+    from docusense.agent import build_agent, ask_agent
     class NativeFake(FakeMessagesListChatModel):
         def bind_tools(self, tools, **kwargs):
             assert {t.name for t in tools} == {'calculator','document_retrieval','web_search'}
@@ -37,7 +37,7 @@ def test_native_call_runs_through_existing_react_executor(monkeypatch, setup_sto
     settings = replace(store.settings,llm_provider='groq',chat_model='openai/gpt-oss-20b')
     memory = ConversationBufferWindowMemory(memory_key='chat_history',k=5,return_messages=True,output_key='output')
     agent,_ = build_agent(memory,store,settings)
-    result = agent.invoke({'input':'17*23?'})
+    result = ask_agent(agent, '17*23?')
     assert result['output'] == '391'
     assert result['intermediate_steps'][0][0].tool == 'calculator'
     assert len(memory.chat_memory.messages) == 2

@@ -2,6 +2,23 @@
 
 Upload PDFs and ask questions through the existing Streamlit interface. Gemini powers embeddings; Groq or Gemini powers answers; a LangChain ReAct agent uses document retrieval, an arithmetic calculator, DuckDuckGo search, five-turn conversation memory, and source citations. Pinecone now stores vectors. No workers or additional web framework are required.
 
+## Architecture in one minute
+
+| Main file | Responsibility |
+|---|---|
+| `streamlit_app.py` | Upload, chat, document controls, and display of tool traces and sources |
+| `docusense/config.py` | Credentials, model choices, chunk sizes, and safe configuration errors |
+| `docusense/document_manager.py` | Duplicate checks, active-document ledger, verified publication, re-indexing, and deletion |
+| `docusense/rag.py` | PDF chunking, Gemini vector search, and optional Pinecone reranking |
+| `docusense/tools.py` | Document retrieval, guarded calculator, DuckDuckGo search, and per-answer citations |
+| `docusense/agent.py` | Groq/Gemini chat model, ReAct `AgentExecutor`, memory, prompt, and current time |
+
+**Upload:** the UI saves a PDF under a random session ID. The document manager parses and chunks it, embeds the chunks with Gemini, and writes them to that session's Pinecone namespace. It verifies every chunk and search visibility before the local SQLite ledger marks the revision active. A repeated upload is a no-op. Re-indexing publishes a verified replacement; deletion hides the document before asking Pinecone to remove its vectors.
+
+**Question:** `ask_agent` supplies fresh Asia/Kolkata time and either answers a date-only question directly or invokes the ReAct `AgentExecutor`. The model can call one of three existing tools. Document retrieval embeds the query with Gemini, searches only published revisions in the session's Pinecone namespace, checks returned metadata, and optionally reranks candidates through Pinecone Inference. The tool supplies source, page and chunk citations; five-turn memory retains the conversation.
+
+`app.py` is an optional maintained CLI for a trusted local operator; it uses the same document manager and agent. `evaluation/` and `tests/` are separate. Archived migration scripts are in `scripts/archive/`.
+
 ## Setup
 
 The tested repository environment is Python 3.9.6 with the pinned packages below. Python 3.9 and its macOS LibreSSL runtime emit upstream support warnings; use Python 3.11 for a new environment and run the checks before deployment. The migration deliberately retains LangChain 0.3 and the installed Gemini integration rather than moving to LangChain 1.x. `langchain-google-genai` is pinned to the **actually installed/tested 2.0.10**; the old requirements listed an uninstalled 2.1.12. Pinecone 7.3.0 is compatible with this existing environment; newer SDKs require newer Python.
@@ -41,18 +58,18 @@ Each session uses its own hashed namespace. Metadata includes text, SHA-256 docu
 
 ```bash
 # Select only PDFs that belong to this trusted local owner.
-python migrate_to_pinecone.py --owner-id YOUR_PRIVATE_LOCAL_OWNER --pdf data/sample.pdf
+PYTHONPATH=. python scripts/archive/migrate_to_pinecone.py --owner-id YOUR_PRIVATE_LOCAL_OWNER --pdf data/sample.pdf
 # Restore a known original filename when a legacy upload has a hashed filename:
-python migrate_to_pinecone.py --owner-id YOUR_PRIVATE_LOCAL_OWNER --pdf uploads/HASH.pdf --source original-report.pdf
+PYTHONPATH=. python scripts/archive/migrate_to_pinecone.py --owner-id YOUR_PRIVATE_LOCAL_OWNER --pdf uploads/HASH.pdf --source original-report.pdf
 # Explicit re-indexing after verification of new vectors:
-python migrate_to_pinecone.py --owner-id YOUR_PRIVATE_LOCAL_OWNER --pdf data/sample.pdf --reindex
+PYTHONPATH=. python scripts/archive/migrate_to_pinecone.py --owner-id YOUR_PRIVATE_LOCAL_OWNER --pdf data/sample.pdf --reindex
 # CLI with the same owner and the existing tools/memory:
 python app.py --owner-id YOUR_PRIVATE_LOCAL_OWNER
 ```
 
 For the migration performed in this workspace, the private owner is stored in `.docusense/migration-owner.txt`, and the verification report in `.docusense/migration-report.json`. Use that owner with the trusted CLI to access the migrated originals. It is never automatically attached to a browser session. Re-upload a PDF to use it in a new UI session.
 
-Three available originals produced **38 verified chunks**. The historical FAISS index contains **46 vectors**: the available originals cannot establish complete coverage of all historical content. Hashed legacy upload filenames lack an original-name mapping. Supply missing originals/citation names if needed. Preserve FAISS until you have manually checked representative private questions and citations. The old `migrate_faiss_to_cosine.py` is a legacy utility that overwrites a FAISS index; **do not run it for Pinecone migration**. It remains unchanged for historical reference.
+Three available originals produced **38 verified chunks**. The historical FAISS index contains **46 vectors**: the available originals cannot establish complete coverage of all historical content. Hashed legacy upload filenames lack an original-name mapping. Supply missing originals/citation names if needed. Preserve FAISS until you have manually checked representative private questions and citations. The old `scripts/archive/migrate_faiss_to_cosine.py` is a legacy utility that overwrites a FAISS index; **do not run it for Pinecone migration**. Both migration scripts are archived and are not part of normal application startup.
 
 Ingestion embeds in bounded batches, upserts deterministic IDs, verifies fetched metadata plus query visibility, then activates the revision in a private SQLite manifest. A failure before publication leaves staged vectors excluded from retrieval; retry safely. Duplicate detection uses document bytes and persists across restarts for the same local owner. Re-indexing activates the replacement only after verification; previous revisions remain stored but excluded, and scoped document deletion removes all revisions. There are no multi-service transactions or distributed writer locks: do not concurrently mutate the same owner/document from separate processes.
 
@@ -111,10 +128,10 @@ Evaluation runs independently of Streamlit in a synthetic-dataset namespace. Rep
 - ReAct can select the wrong tool or omit an answer citation; independently captured source/page/chunk evidence remains visible. LLM relevance judgments can be wrong. Review private-question answers manually.
 - Migration success does not imply production readiness.
 
-Project code is split into `docusense/` (shared services/tools), `streamlit_app.py` (existing UI), `app.py` (CLI), `migrate_to_pinecone.py`, `evaluation/`, and `tests/`. Historical FAISS support is optional in `requirements-legacy-faiss.txt` and is not used by the active application.
+Historical FAISS support is optional in `requirements-legacy-faiss.txt` and is not used by the active application.
 
 Official references: [Pinecone indexes](https://docs.pinecone.io/guides/index-data/create-an-index), [namespaces](https://docs.pinecone.io/guides/manage-data/manage-namespaces), [hosted reranking](https://docs.pinecone.io/guides/search/rerank-results), [SDK compatibility](https://docs.pinecone.io/reference/sdks/python/overview). Detailed outcomes and limitations are in [docs/IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md).
 
-Final local verification: **40 tests passed**, dependency checks passed, original-file hashes unchanged, and live Pinecone duplicate/isolation/re-index/delete fixture checks passed. Full live Gemini agent and answer comparison remain blocked by the observed daily quota; mocked ReAct/UI tests are distinguished from live model validation in the implementation log.
+The architecture refactor passed **55 tests** and a local Streamlit health check. Earlier live Pinecone duplicate/isolation/re-index/delete fixture checks are recorded in the implementation log; the refactor itself did not mutate the configured Pinecone index. Full live model answer comparison and human citation review remain separate from the mocked ReAct/UI tests.
 
 The earlier checked-in benchmark reports used Gemini chat. New evaluations use the configured chat provider and record its model/provider. Do not compare answer scores across providers as if only reranking changed. Changing the chat provider does not require re-indexing. Restart Streamlit after changing `.env` so existing agents use the new configuration.

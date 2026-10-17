@@ -3,7 +3,7 @@ import argparse
 import json
 from pathlib import Path
 from docusense.config import Settings, DocuSenseError
-from docusense.store import connect_store
+from docusense.document_manager import connect_document_manager
 
 
 def main():
@@ -18,7 +18,7 @@ def main():
         parser.error('--source requires exactly one --pdf')
     rows = []
     try:
-        store = connect_store(Settings.load(), args.owner_id)
+        store = connect_document_manager(Settings.load(), args.owner_id)
         for path in args.pdf:
             try:
                 result = store.ingest_pdf(path, args.source, reindex=args.reindex)

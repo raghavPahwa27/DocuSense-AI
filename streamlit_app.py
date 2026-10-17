@@ -6,9 +6,9 @@ from pathlib import Path
 import streamlit as st
 from langchain.memory import ConversationBufferWindowMemory
 from docusense.config import Settings, DocuSenseError, CHUNK_SIZE, CHUNK_OVERLAP, ROOT
-from docusense.store import connect_store, digest
-from docusense.agent import build_agent
-from docusense.errors import agent_error_message
+from docusense.document_manager import connect_document_manager
+from docusense.rag import digest
+from docusense.agent import build_agent, ask_agent, agent_error_message
 
 UPLOADS_DIR = ROOT / 'uploads' / 'sessions'
 
@@ -117,8 +117,10 @@ if "memory" not in st.session_state:
     )
 if "agent_executor"    not in st.session_state:
     st.session_state.agent_executor    = None
-if "web_searcher"      not in st.session_state:
-    st.session_state.web_searcher      = None
+if "tool_evidence"     not in st.session_state:
+    st.session_state.tool_evidence     = None
+    # Rebuild a pre-refactor agent after Streamlit hot reloads this code.
+    st.session_state.agent_executor    = None
 if "chat_history"      not in st.session_state:
     st.session_state.chat_history      = []
 if "processed_hashes"  not in st.session_state:
@@ -146,14 +148,14 @@ if settings is not None:
                           digest((settings.groq_api_key if settings.llm_provider == "groq" else settings.google_api_key).encode()))
     if st.session_state.get("chat_configuration") != chat_configuration:
         st.session_state.agent_executor = None
-        st.session_state.web_searcher = None
+        st.session_state.tool_evidence = None
         st.session_state.chat_configuration = chat_configuration
 
 def session_store():
     if settings is None:
         raise DocuSenseError("Configure chat, embedding, and Pinecone credentials first.")
     if st.session_state.store is None:
-        st.session_state.store = connect_store(settings, st.session_state.owner_id)
+        st.session_state.store = connect_document_manager(settings, st.session_state.owner_id)
     return st.session_state.store
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
@@ -196,9 +198,9 @@ with st.sidebar:
     if st.session_state.doc_names and st.session_state.agent_executor is None:
         try:
             with st.spinner("🔄 Updating knowledge base …"):
-                executor, searcher = build_agent(st.session_state.memory, session_store(), settings)
+                executor, evidence = build_agent(st.session_state.memory, session_store(), settings)
                 st.session_state.agent_executor = executor
-                st.session_state.web_searcher = searcher
+                st.session_state.tool_evidence = evidence
         except Exception:
             st.error("Agent initialization failed. Check chat-provider access and LangChain Hub connectivity, then retry.")
 
@@ -367,28 +369,28 @@ if st.session_state.agent_executor:
     # ── Run the agent ──────────────────────────────────────────────────────────
     if ask_btn and user_query.strip():
         # Reset evidence before each query so sources belong to this response only
-        if st.session_state.web_searcher:
-            st.session_state.web_searcher.reset()
+        if st.session_state.tool_evidence:
+            st.session_state.tool_evidence.reset()
 
         try:
             with st.spinner("🤖 Agent is reasoning …"):
-                result = st.session_state.agent_executor.invoke({"input": user_query})
+                result = ask_agent(st.session_state.agent_executor, user_query)
         except Exception as exc:
             st.error(agent_error_message(exc, settings.llm_provider, settings.chat_model))
             st.stop()
 
-        # Evidence is populated by WebSearchTool.run() during the agent run
+        # Evidence is populated by the existing tools during this agent run.
         sources = (
-            list(st.session_state.web_searcher.evidence)
-            if st.session_state.web_searcher else []
+            list(st.session_state.tool_evidence.evidence)
+            if st.session_state.tool_evidence else []
         )
 
         st.session_state.chat_history.append({
             "q":       user_query,
             "a":       result["output"],
             "trace":   result.get("intermediate_steps", []),
-            "document_sources": list(st.session_state.web_searcher.document_evidence),
-            "retrieval_status": st.session_state.web_searcher.retrieval_status,
+            "document_sources": list(st.session_state.tool_evidence.document_evidence),
+            "retrieval_status": st.session_state.tool_evidence.retrieval_status,
             "sources": sources,   # [{title, url, snippet}] — empty if web_search unused
         })
         st.rerun()

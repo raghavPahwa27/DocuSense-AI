@@ -1,4 +1,4 @@
-from docusense.errors import agent_error_message
+from docusense.agent import agent_error_message
 
 
 def test_provider_messages_do_not_expose_exception_body():

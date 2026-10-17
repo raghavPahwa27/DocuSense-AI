@@ -1,6 +1,6 @@
 import pytest
 from docusense.config import DocuSenseError
-from docusense.store import PineconeStore, pdf_chunks
+from docusense.rag import pdf_chunks, as_dict
 from conftest import chunk, FakeEmbeddings
 
 
@@ -64,13 +64,11 @@ def test_rejects_incompatible_index(setup_store, field, value):
 
 def test_sdk_fetch_response_dataclass():
     from pinecone import FetchResponse
-    from docusense.store import as_dict
     assert as_dict(FetchResponse(namespace='test', vectors={}, usage={}))['vectors'] == {}
 
 
 def test_sdk_fetch_does_not_deepcopy_usage():
     from pinecone import FetchResponse, Vector
-    from docusense.store import as_dict
     class Usage:
         def __deepcopy__(self, memo):
             raise TypeError('SDK object is not copyable')

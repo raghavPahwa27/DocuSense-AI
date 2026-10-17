@@ -1,60 +1,15 @@
-"""Bring-your-own Gemini vectors. No FAISS loading, pickle, or integrated embeddings."""
-import hashlib
+"""Verified document publication and deletion for a session's Pinecone vectors."""
 import json
 import math
 import sqlite3
 import time
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass
 from contextlib import contextmanager, closing
 from pathlib import Path
 from typing import Optional
 
-from langchain_core.documents import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader
-from .config import CHUNK_SIZE, CHUNK_OVERLAP, EMBEDDING_MODEL, DocuSenseError
-
-
-def digest(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-def as_dict(value):
-    if isinstance(value, dict):
-        return value
-    if is_dataclass(value):
-        # SDK dataclasses can contain OpenAPI objects that cannot be deep-copied.
-        return {field.name: getattr(value, field.name) for field in fields(value)}
-    return value.to_dict()
-
-
-def pdf_chunks(path: Path, source: str, owner_id: str):
-    try:
-        if path.stat().st_size > 25 * 1024 * 1024:
-            raise DocuSenseError('PDF exceeds the 25 MB ingestion limit.')
-        content = path.read_bytes()
-    except OSError:
-        raise DocuSenseError('Cannot read the PDF file.') from None
-    if b'%PDF-' not in content[:1024]:
-        raise DocuSenseError('Invalid PDF file header.')
-    document_id = digest(content)
-    try:
-        pages = PyPDFLoader(str(path)).load()
-    except Exception:
-        raise DocuSenseError('Invalid, encrypted, or unreadable PDF.') from None
-    chunks = RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP
-    ).split_documents(pages)
-    chunks = [c for c in chunks if c.page_content.strip()]
-    if not chunks:
-        raise DocuSenseError('No extractable text found. Scanned PDFs require OCR before upload.')
-    for i, chunk in enumerate(chunks):
-        chunk.metadata = {
-            'document_id': document_id, 'source': Path(source).name,
-            'page': int(chunk.metadata.get('page', 0)), 'chunk_index': i,
-            'owner_id': owner_id, 'chunk_id': f'{document_id}:{i:06d}',
-        }
-    return document_id, chunks
+from .config import EMBEDDING_MODEL, DocuSenseError
+from .rag import as_dict, digest, pdf_chunks, search_vectors
 
 
 class Manifest:
@@ -110,7 +65,7 @@ class IngestionResult:
     duplicate: bool
 
 
-class PineconeStore:
+class DocumentManager:
     def __init__(self, client, embeddings, settings, owner_id: str, *, verify_attempts=8):
         if not owner_id or not owner_id.strip():
             raise DocuSenseError('A nonempty owner/session ID is required.')
@@ -240,40 +195,10 @@ class PineconeStore:
         raise DocuSenseError('Pinecone verification timed out. Retry ingestion; this revision is not published.')
 
     def retrieve(self, query: str, *, top_k=4, document_id=None):
-        if not 1 <= top_k <= 100:
-            raise DocuSenseError('Retrieval top_k must be between 1 and 100.')
         active = self.manifest.documents(self.owner_id)
         if document_id:
             active = [r for r in active if r['document_id'] == document_id]
-        if not query.strip() or not active:
-            return []
-        filters = self._filter()
-        filters['$or'] = [{'document_id': {'$eq': r['document_id']}, 'revision': {'$eq': r['revision']}} for r in active]
-        try:
-            vector = self.embeddings.embed_query(query)
-            self._validate_vector(vector)
-        except DocuSenseError:
-            raise
-        except Exception:
-            raise DocuSenseError('Query embedding failed. Please retry later.') from None
-        try:
-            result = as_dict(self.index.query(vector=vector, namespace=self.namespace,
-                filter=filters, top_k=top_k, include_metadata=True))
-        except Exception:
-            raise DocuSenseError('Pinecone search failed. Please retry later.') from None
-        allowed = {(r['document_id'], r['revision']) for r in active}
-        documents = []
-        for item in result.get('matches', []):
-            match = as_dict(item)
-            metadata = dict(match.get('metadata') or {})
-            # Defense in depth: check provider response as well as query filters.
-            if metadata.get('owner_id') != self.owner_id or (metadata.get('document_id'), metadata.get('revision')) not in allowed:
-                continue
-            text = metadata.pop('text', '')
-            if text:
-                metadata['vector_score'] = match.get('score')
-                documents.append(Document(page_content=text, metadata=metadata))
-        return documents
+        return search_vectors(self, query, active, top_k=top_k)
 
     def delete_document(self, document_id):
         if not any(r['document_id'] == document_id for r in self.manifest.documents(self.owner_id, False)):
@@ -286,11 +211,11 @@ class PineconeStore:
         self.manifest.remove(self.owner_id, document_id)
 
 
-def connect_store(settings, owner_id):
+def connect_document_manager(settings, owner_id):
     from functools import partial
     from pinecone import Pinecone
     from langchain_google_genai import GoogleGenerativeAIEmbeddings
     embeddings = GoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL, google_api_key=settings.google_api_key)
     # Bound provider retries/timeouts without changing model/task/dimension settings.
     embeddings.client.batch_embed_contents = partial(embeddings.client.batch_embed_contents, timeout=30, retry=None)
-    return PineconeStore(Pinecone(api_key=settings.pinecone_api_key), embeddings, settings, owner_id)
+    return DocumentManager(Pinecone(api_key=settings.pinecone_api_key), embeddings, settings, owner_id)

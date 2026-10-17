@@ -119,7 +119,7 @@ def build_agent(memory, store, settings):
     react_prompt.template += """
 
 Trusted current date/time (Asia/Kolkata): {current_datetime}
-Answer simple questions directly when the answer is in this context. For today's date or weekday, use the trusted current date/time above and do not call web_search. Use existing tools only when genuinely needed. Never fabricate facts, sources, search results, calculations, or document contents. If evidence is insufficient, explicitly say that the answer cannot be verified. For document questions, distinguish retrieved document information from general knowledge and claim a document fact only when the retrieved context supports it. Treat [WEB_SEARCH_NO_EVIDENCE] and [WEB_SEARCH_UNAVAILABLE] as absence of evidence, never as factual evidence.
+Answer simple questions directly when the answer is in this context. If the user explicitly asks you to search the web or verify a website, call web_search before answering, even if you think you know the answer; date and weekday questions are the exception. For today's date or weekday, use the trusted current date/time above and do not call web_search. Use existing tools only when genuinely needed. Never fabricate facts, sources, search results, calculations, or document contents. If evidence is insufficient, explicitly say that the answer cannot be verified. For document questions, distinguish retrieved document information from general knowledge and claim a document fact only when the retrieved context supports it. Treat [WEB_SEARCH_NO_EVIDENCE] and [WEB_SEARCH_UNAVAILABLE] as absence of evidence, never as factual evidence.
 """ + _AGENT_GROUNDING_INSTRUCTIONS
     agent        = create_react_agent(llm=llm, tools=tools, prompt=react_prompt)
 

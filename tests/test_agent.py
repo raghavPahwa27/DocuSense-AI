@@ -1,4 +1,4 @@
-from docusense.tools import calculate, ToolEvidence
+from docusense.tools import calculate, ToolEvidence, build_tools
 from docusense.agent import (
     ask_agent,
     _AGENT_GROUNDING_INSTRUCTIONS,
@@ -27,6 +27,7 @@ def test_web_evidence_and_reset(monkeypatch):
     monkeypatch.setattr('docusense.tools._DDGS', DDGS)
     tool = ToolEvidence()
     assert 'Evidence' in tool.web_search('query')
+    assert tool.evidence == [{'title':'Example', 'url':'https://example.com', 'snippet':'Evidence'}]
     tool.web_search('query')
     assert len(tool.evidence) == 1
     tool.reset()
@@ -59,9 +60,11 @@ def test_empty_web_results_are_explicitly_non_evidence(monkeypatch):
         def __exit__(self, *args): pass
         def text(self, *args, **kwargs): return []
     monkeypatch.setattr('docusense.tools._DDGS', DDGS)
-    result = ToolEvidence().web_search('query')
+    tool = ToolEvidence()
+    result = tool.web_search('query')
     assert 'WEB_SEARCH_NO_EVIDENCE' in result
     assert 'Do not infer facts' in result
+    assert tool.evidence == []
 
 
 def test_web_exceptions_are_explicitly_non_evidence(monkeypatch):
@@ -70,9 +73,26 @@ def test_web_exceptions_are_explicitly_non_evidence(monkeypatch):
         def __exit__(self, *args): pass
         def text(self, *args, **kwargs): raise RuntimeError('provider detail')
     monkeypatch.setattr('docusense.tools._DDGS', DDGS)
-    result = ToolEvidence().web_search('query')
+    tool = ToolEvidence()
+    result = tool.web_search('query')
     assert 'WEB_SEARCH_UNAVAILABLE' in result
     assert 'provider detail' not in result
+    assert tool.evidence == []
+
+
+def test_web_search_tool_preserves_agent_interface(monkeypatch):
+    class DDGS:
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def text(self, query, **kwargs):
+            assert query == 'official Python website'
+            assert kwargs['max_results'] == 5
+            return [{'href':'https://www.python.org/', 'title':'Welcome to Python.org', 'body':'Official site'}]
+    monkeypatch.setattr('docusense.tools._DDGS', DDGS)
+    tools, evidence = build_tools(None)
+    web_tool = next(tool for tool in tools if tool.name == 'web_search')
+    assert 'Official site' in web_tool.run('official Python website')
+    assert evidence.evidence[0]['url'] == 'https://www.python.org/'
 
 
 class _RecordingExecutor:
